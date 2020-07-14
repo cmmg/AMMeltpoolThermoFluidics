@@ -12,42 +12,84 @@
 
 //Chemistry residual implementation
 template <int dim>
-void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<dim>& fe_face_values, const typename DoFHandler<dim>::active_cell_iterator &cell, double dt, dealii::Table<1, Sacado::Fad::DFad<double> >& ULocal, dealii::Table<1, double>& ULocalConv, dealii::Table<1, Sacado::Fad::DFad<double> >& R, double currentTime, double totalTime) {
+void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<dim>& fe_face_values, const typename DoFHandler<dim>::active_cell_iterator &cell, double dt, dealii::Table<1, Sacado::Fad::DFad<double> >& ULocal, dealii::Table<1, double>& ULocalConv, dealii::Table<1, double>& ULocalConvConv, dealii::Table<1, Sacado::Fad::DFad<double> >& R, double currentTime, double totalTime) {
   unsigned int dofs_per_cell= fe_values.dofs_per_cell;
   unsigned int n_q_points= fe_values.n_quadrature_points;
   
   unsigned int n_q_points_face= fe_face_values.n_quadrature_points;
   const unsigned int faces_per_cell = GeometryInfo<dim>::faces_per_cell;
- 
-  dealii::Table<1,double> c_conv(n_q_points);
-  //  dealii::Table<1,double> phi_conv(n_q_points);
-	
-  //evaluate gradients 
-  dealii::Table<1,Sacado::Fad::DFad<double> > c(n_q_points), cface(n_q_points_face), liquid(n_q_points),liquid_conv(n_q_points); 
-  dealii::Table<2,Sacado::Fad::DFad<double> > c_j(n_q_points, dim);
-  //dealii::Table<2,double> c_conv_j(n_q_points, dim);
-
+  
+  //Velocity and Pressure  
+  dealii::Table<1,Sacado::Fad::DFad<double> > ux(n_q_points), uy(n_q_points);
+  dealii::Table<1,double> ux_conv(n_q_points),ux_conv_conv(n_q_points), ux_star(n_q_points);
+  dealii::Table<1,double> uy_conv(n_q_points),uy_conv_conv(n_q_points), uy_star(n_q_points);
+  dealii::Table<1,double> press_conv(n_q_points), phi_conv(n_q_points), phi_conv_conv(n_q_points);
+  dealii::Table<2,Sacado::Fad::DFad<double> > press_conv_j(n_q_points, dim), phi_conv_j(n_q_points,dim),phi_conv_conv_j(n_q_points,dim) ;
+  dealii::Table<2,Sacado::Fad::DFad<double> > ux_j(n_q_points, dim), uy_j(n_q_points,dim);
+  dealii::Table<2,double> grad_press_intm(n_q_points,dim);
   //Interpolate on all cells 
-  for (unsigned int q=0; q<n_q_points; ++q) {
-    c[q]=0.0; c_conv[q]=0.0; liquid[q]=0.0; liquid_conv[q]=0.0;    
-
-    for (unsigned int j=0; j<dim; j++) {c_j[q][j]=0.0;  }
+  for (unsigned int q=0; q<n_q_points; ++q) {  
+    ux[q]=0.0; uy[q]=0.0;
+    ux_conv[q]=0; ux_conv_conv[q]=0, ux_star[q]=0;
+    uy_conv[q]=0; uy_conv_conv[q]=0, uy_star[q]=0;
+    //press_conv[q]=0; phi_conv[q]=0; phi_conv_conv[q]=0;
+    
+    for (unsigned int j=0; j<dim; j++) {
+      ux_j[q][j]=0.0;
+      uy_j[q][j]=0.0;      
+    }
+    
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-      if (ck==0) { c[q]+=fe_values.shape_value(i, q)*ULocal[i]; c_conv[q]+=fe_values.shape_value(i, q)*ULocalConv[i]; }
-      else if (ck==1) {liquid[q]+=fe_values.shape_value(i, q)*ULocal[i]; liquid_conv[q]+=fe_values.shape_value(i, q)*ULocalConv[i]; }
-      for (unsigned int j=0; j<dim; j++) {
-	if (ck==0) {
-	  c_j[q][j]+=fe_values.shape_grad(i, q)[j]*ULocal[i];
+      if (ck==0) {
+	ux[q]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
+	ux_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	ux_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];
+	ux_star[q]+=2*ux_conv[q]-ux_conv_conv[q];
+	for (unsigned int j=0; j<dim; j++) {
+	  ux_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];	  
+	}		
+      }
+
+      else if (ck==1) {	
+	uy[q]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
+	uy_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	uy_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];
+	uy_star[q]+=2*uy_conv[q]-uy_conv_conv[q];
+
+	
+	for (unsigned int j=0; j<dim; j++) {
+	  uy_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];	  
+	}		
+      }
+
+      else if (ck==2) {
+	//press_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+
+	for (unsigned int j=0; j<dim; j++) {
+	  press_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];	  
 	}
 	
       }
+      else if (ck==3) {
+	phi_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	phi_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];
 
+	for (unsigned int j=0; j<dim; j++) {
+	  phi_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	  phi_conv_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConvConv[i];
+	}
+	
+	
+      }
+      
+           
     }
         
   }
 
   //Interpolate over faces
+  /*
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
     double CHECKL=cell->face(f)->center()[0];
@@ -71,59 +113,64 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     
   }
 
+  */
+
   //evaluate Residual on cell
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
     Sacado::Fad::DFad<double>  KK_T,CC_T;
-    
-    
-    for (unsigned int q=0; q<n_q_points; ++q) {
         
-      if (ck==0) {		
-	R[i] += (1.0/dt)*fe_values.shape_value(i, q)*(c[q]-c_conv[q])*fe_values.JxW(q);  
+    for (unsigned int q=0; q<n_q_points; ++q) {        
+      if (ck==0) {
+	//Mass term
+	R[i] +=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3*ux[q]-4*ux_conv[q]+4*ux_conv_conv[q])*fe_values.JxW(q);	
 
 	
-	//R[i] += (VV)*fe_values.shape_value(i, q)*c_j[q][0]*fe_values.JxW(q);
-
-
-	if (c_conv[q]<=TLL && c_conv[q]>=0.0)
-	  {
-	    KK_T=1.57 + (1.6*pow(10.0,-2.0)*c_conv[q])- (pow(10.0,-6)*c_conv[q]*c_conv[q]);
-	    CC_T= 492.4 + (0.025*c_conv[q]) -(4.18*pow(10.0,-6)*c_conv[q]*c_conv[q]) ;
-	  }
-	else if (c_conv[q]>=TLL) {KK_T=33.4 ; CC_T=830.0;}
-
-	//sink term
-	R[i] +=(LATENT/CC_T)*(1.0/dt)*fe_values.shape_value(i, q)*(liquid[q]-liquid_conv[q])*fe_values.JxW(q);
-
-	//Sink term laser                                                                                                                                                                                                                                                        
-        Point<dim> qPoint=fe_values.quadrature_point(q);
-        Sacado::Fad::DFad<double>  LASER =(ABSORB)*DD*(PP/3.1416/spotRadius/spotRadius/LAYER);
-        LASER*=std::exp(-(BB/spotRadius/spotRadius)*((qPoint[0]-VV*currentTime)*(qPoint[0]-VV*currentTime)))  ;
-        LASER*=std::exp(-(BB/spotRadius/spotRadius)*((2.0*qPoint[2]-problem_Width)*(2.0*qPoint[2]-problem_Width) ))  ;
-        LASER*=std::exp(-(BB/LAYER/LAYER)*((qPoint[1]-problem_Height)*(qPoint[1]-problem_Height) ))  ;
-        R[i] +=-(1.0/RHO/CC_T)*fe_values.shape_value(i, q)*(LASER)*fe_values.JxW(q);
-
-	
-	
+	//laplacian term
 	for (unsigned int j = 0; j < dim; j++){
-	  R[i] += (KK_T/RHO/CC_T)*fe_values.shape_grad(i, q)[j]*c_j[q][j]*fe_values.JxW(q);
+	  R[i] +=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(ux_j[q][j])*fe_values.JxW(q);
+	}
+	//advection term
+	//First part
+	R[i] +=fe_values.shape_value_component(i, q, ck)*(ux_star[q])*(ux_j[q][0])*fe_values.JxW(q);
+	R[i] +=fe_values.shape_value_component(i, q, ck)*(uy_star[q])*(ux_j[q][1])*fe_values.JxW(q);
+	//second part
+	R[i] +=0.5*fe_values.shape_value_component(i, q, ck)*(ux[q])*(ux_j[q][0]+ux_j[q][1])*fe_values.JxW(q);	
+      }
+
+      else if (ck==1) {						
+	//Mass term
+	R[i] +=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3*uy[q]-4*uy_conv[q]+4*uy_conv_conv[q])*fe_values.JxW(q);	
+		
+	//laplacian term
+	for (unsigned int j = 0; j < dim; j++){
+	  R[i] +=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(uy_j[q][j])*fe_values.JxW(q);
+	}
+	//advection term
+	//First part
+	R[i] +=fe_values.shape_value_component(i, q, ck)*(ux_star[q])*(uy_j[q][0])*fe_values.JxW(q);
+	R[i] +=fe_values.shape_value_component(i, q, ck)*(uy_star[q])*(uy_j[q][1])*fe_values.JxW(q);
+	//second part
+	R[i] +=0.5*fe_values.shape_value_component(i, q, ck)*(uy[q])*(uy_j[q][0]+uy_j[q][1])*fe_values.JxW(q);	
+      }
+      
+      else if (ck==2) {
+
+	for (unsigned int j = 0; j < dim; j++){
+	  R[i] +=fe_values.shape_grad_component(i, q, ck)[j]*(press_conv_j[q][j])*fe_values.JxW(q);
+	  R[i] +=(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_conv_j[q][j])*fe_values.JxW(q);
+	  R[i] +=(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_conv_conv_j[q][j])*fe_values.JxW(q);
 	}
 	
       }
-
-      else if (ck==1) {
-	Sacado::Fad::DFad<double> FRACTION;
-	FRACTION=std::tanh(2.5*(c[q]-0.5*(TLL+TSS))/(TLL-TSS)/2.0) ;
-	FRACTION=(1+FRACTION)*0.5;
-	R[i] += fe_values.shape_value(i, q)*(liquid[q]-FRACTION )*fe_values.JxW(q);
-	
-      }
+      
+      
      
     }
   }
 
 
+  /*
   //surface integral
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
@@ -132,9 +179,10 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     double CHECKH=cell->face(f)->center()[1];
     double CHECKW=cell->face(f)->center()[2];
     if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {    
-      //  if(cell->face(f)->center()[1] == problem_Height /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {
-        
-      //evaluate Residual on face
+      //  if(cell->face(f)->center()[1] == problem_Height /*&& cell->face(f)->center()[2]==0.5*problem_Width*/  /*) {
+
+  
+  /*      //evaluate Residual on face
       for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	
@@ -167,6 +215,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     }
 
   }
+  */
+  
 
   
 }

@@ -1,4 +1,3 @@
-//
 //Computational Mechanics and Multiphysics Group @ UW-Madison
 //Basic framework for Phase Field (Cahn-Hilliard mixed formulation)
 //Created May 2018
@@ -21,13 +20,14 @@ namespace phaseField1
   template <int dim>
   class InitalConditions: public Function<dim>{
   public:
-    InitalConditions (): Function<dim>(2){ }
+    InitalConditions (): Function<dim>(DIMS){ }
     void vector_value (const Point<dim>   &p, Vector<double>   &values) const{
-        Assert (values.size() == 2, ExcDimensionMismatch (values.size(), 2));     	
+        Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     	
 
-	values(0)=300.0;
+	values(0)=0.0;
 	values(1)=0.0;
-
+	values(2)=0.0;
+	values(3)=0.0;
     }
     
   };
@@ -56,10 +56,14 @@ namespace phaseField1
     ConstraintMatrix                          constraints, constraintsZero;
     LA::MPI::SparseMatrix                     system_matrix;
     LA::MPI::Vector                           locally_relevant_solution, U, Un, UGhost, UnGhost, dU;
+    LA::MPI::Vector                           Unn, UnnGhost; 
     LA::MPI::Vector                           system_rhs;
     ConditionalOStream                        pcout;
     TimerOutput                               computing_timer;
 
+    std::vector<types::boundary_id>           boundary_ids;
+    
+    
     //solution variables
     unsigned int currentIncrement, currentIteration;
     double totalTime, currentTime, dt;
@@ -73,8 +77,8 @@ namespace phaseField1
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-    fe(FE_Q<dim>(FEOrder),2),
-    dof_handler (triangulation),
+    fe(FE_Q<dim>(2),dim,FE_Q<dim>(1),2),
+    dof_handler(triangulation),
     pcout (std::cout, (Utilities::MPI::this_mpi_process(mpi_communicator)== 0)),
     computing_timer (mpi_communicator, pcout, TimerOutput::summary, TimerOutput::wall_times){
     //solution variables
@@ -82,15 +86,15 @@ namespace phaseField1
     currentIncrement=0; currentTime=0;
 
     //nodal Solution names
-    nodal_solution_names.push_back("T"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-    nodal_solution_names.push_back("liquid"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-
- 
+   nodal_solution_names.push_back("ux"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+   nodal_solution_names.push_back("uy"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+   nodal_solution_names.push_back("pressure"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+    nodal_solution_names.push_back("PHI"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
   }
   
   template <int dim>
   phaseField<dim>::~phaseField (){
-    dof_handler.clear ();
+    dof_handler.clear ();   
   }
 
   //Apply boundary conditions
@@ -105,38 +109,23 @@ namespace phaseField1
     
     //Setup boundary conditions
     //No Dirchlet BC are necessary for the parabolic problem
+    std::vector<bool> uBCX0 (DIMS, false); uBCX0[0]=true;
+        
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraints,uBCX0);
+    //VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(dim+1) , constraints,uBCX0);
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraintsZero,uBCX0);
    
-    std::vector<bool> uBCX0 (2, false); uBCX0[0]=true;
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(0.0,2), constraints,uBCX0);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(2) , constraintsZero,uBCX0);
-    
-    /*   
-    VectorTools::interpolate_boundary_values (dof_handler, 0,ConstantFunction<dim>(300.0) , constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 0,ZeroFunction<dim>() , constraintsZero);
-    
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ConstantFunction<dim>(300.0), constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>() , constraintsZero);
-    
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(900.0), constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>() , constraintsZero);
-	
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ConstantFunction<dim>(900.0), constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>() , constraintsZero);
-    
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ConstantFunction<dim>(300.0), constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>() , constraintsZero);
+    //  VectorTools::interpolate_boundary_values (dof_handler, 1, ConstantFunction<dim>(0.0,dim+1), constraints,uBCX0);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBCX0);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBCX0);
 
-    VectorTools::interpolate_boundary_values (dof_handler, 5, ConstantFunction<dim>(300.0), constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 5, ZeroFunction<dim>() , constraintsZero);
+    // VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(0.0,dim+1), constraints,uBCX0);   
+    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraints,uBCX0);
+    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uBCX0);
 
-    VectorTools::interpolate_boundary_values (dof_handler, 6, ConstantFunction<dim>(300.0), constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 6, ZeroFunction<dim>() , constraintsZero);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(1.0,DIMS), constraints,uBCX0);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCX0);
 
-    VectorTools::interpolate_boundary_values (dof_handler, 7, ConstantFunction<dim>(900.0), constraints);
-    VectorTools::interpolate_boundary_values (dof_handler, 7, ZeroFunction<dim>() , constraintsZero);
-    */
-   
-    
     constraints.close ();
     constraintsZero.close ();
   }
@@ -146,6 +135,8 @@ namespace phaseField1
   void phaseField<dim>::setup_system (){
     TimerOutput::Scope t(computing_timer, "setup");
     dof_handler.distribute_dofs (fe);
+
+    
     locally_owned_dofs = dof_handler.locally_owned_dofs ();
     DoFTools::extract_locally_relevant_dofs (dof_handler,
                                              locally_relevant_dofs);
@@ -158,10 +149,15 @@ namespace phaseField1
     Un.reinit (locally_owned_dofs, mpi_communicator);
     dU.reinit (locally_owned_dofs, mpi_communicator);
 
+    
+    Unn.reinit (locally_owned_dofs, mpi_communicator);
+    
     //Ghost vectors
     UGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
 
+    UnnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+    
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions(0);
     
@@ -208,21 +204,27 @@ namespace phaseField1
 	cell->get_dof_indices (local_dof_indices);
 	 //AD variables
 	Table<1, Sacado::Fad::DFad<double> > ULocal(dofs_per_cell); Table<1, double > ULocalConv(dofs_per_cell);
+
+	Table<1, double > ULocalConvConv(dofs_per_cell);
+	
 	for (unsigned int i=0; i<dofs_per_cell; ++i){
 	  if (std::abs(UGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
 	  else{ULocal[i]=UGhost(local_dof_indices[i]);}
-	  // std::cout<<" "<< ULocal[i].val(); //<<std::endl;
 	  ULocal[i].diff (i, dofs_per_cell);
 	  ULocalConv[i]= UnGhost(local_dof_indices[i]);
+
+	  ULocalConvConv[i]= UnnGhost(local_dof_indices[i]);
 	}
 
 	//setup residual vector
 	Table<1, Sacado::Fad::DFad<double> > R(dofs_per_cell); 
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {R[i]=0.0;}
 	
-	//populate residual vector 
-	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime);
-	
+	 
+	//populate residual vctor 
+	//residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime);
+	 residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv, R, currentTime, totalTime);
+	       		
 	//evaluate Residual(R) and Jacobian(R')
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  for (unsigned int j=0; j<dofs_per_cell; ++j){
@@ -233,7 +235,7 @@ namespace phaseField1
 	  //R
 	  local_rhs(i) = -R[i].val();
 	}
-	if (currentIteration==0){
+	if ((currentIteration==0)&&(currentIncrement==1)){
 	  constraints.distribute_local_to_global (local_matrix, local_rhs, local_dof_indices, system_matrix, system_rhs);	
 	}
 	else{
@@ -251,8 +253,8 @@ namespace phaseField1
   void phaseField<dim>::solveIteration(){
     TimerOutput::Scope t(computing_timer, "solve");
     LA::MPI::Vector completely_distributed_solution (locally_owned_dofs, mpi_communicator);
-
-    /*
+    
+    
     //Iterative solvers from Petsc and Trilinos
     SolverControl solver_control (dof_handler.n_dofs(), 1e-12);
 #ifdef USE_PETSC_LA
@@ -272,16 +274,19 @@ namespace phaseField1
     pcout << "   Solved in " << solver_control.last_step()
           << " iterations." << std::endl;
     
-    */
+    
   // remove if needed
 
-     
+
+    /*
     //Direct solver MUMPS
     SolverControl cn;
     PETScWrappers::SparseDirectMUMPS solver(cn, mpi_communicator);
     solver.set_symmetric_mode(false);
     solver.solve(system_matrix, completely_distributed_solution, system_rhs);
-    if (currentIteration>0){
+    */
+
+    if ((currentIteration==0)&&(currentIncrement==1)){
       constraintsZero.distribute (completely_distributed_solution);
     }
     else{
@@ -289,11 +294,14 @@ namespace phaseField1
     }
     locally_relevant_solution = completely_distributed_solution;
     dU = completely_distributed_solution; 
-    }   
+    
+    
+  }   
 
+  
     
 
-    /*
+  /* 
  //Solve iteration
   template <int dim>
   void phaseField<dim>::solveIteration ()
@@ -309,14 +317,20 @@ namespace phaseField1
     PETScWrappers::PreconditionBlockJacobi preconditioner(system_matrix);
     cg.solve (system_matrix,  completely_distributed_solution, system_rhs,
               preconditioner);
-    constraints.distribute (completely_distributed_solution);
+
+    if ((currentIteration==0)&&(currentIncrement==1)){
+      constraintsZero.distribute (completely_distributed_solution);
+    }
+    else{
+      constraints.distribute (completely_distributed_solution);
+    }    
     locally_relevant_solution = completely_distributed_solution;
     dU = completely_distributed_solution;
     pcout << "   Solved in " << solver_control.last_step()
           << " iterations." << std::endl;
   }
 
-  */
+  */  
 
   
   //Solve
@@ -325,7 +339,8 @@ namespace phaseField1
     double res=1, tol=1.0e-12, abs_tol=1.0e-14, initial_norm=0, current_norm=0;
     double machineEPS=1.0e-15;
     currentIteration=0;
-    char buffer[200];
+    char buffer[200];    
+    Unn=Un;UnnGhost=UnGhost;    
     while (true){
       if (currentIteration>=25){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
@@ -338,7 +353,7 @@ namespace phaseField1
       solveIteration();
       U+=dU; UGhost=U; 
       ++currentIteration;
-    }
+    }     
     Un=U; UnGhost=Un;
   }
 
@@ -381,7 +396,7 @@ namespace phaseField1
     }
   }
 
-  
+  /*
   //Adaptive grid refinement
   template <int dim>
   void phaseField<dim>::refine_grid (){
@@ -481,31 +496,48 @@ namespace phaseField1
 	checkForFurtherRefinement=false;
       }
     }
-  }
-   
+    } */
+  
 
     //Solve problem
   template <int dim>
   void phaseField<dim>::run (){
+    
+    GridIn<dim> grid_in;
+      grid_in.attach_triangulation(triangulation);
+      {
+	std::string   filename = "nsbench2.inp";
+	std::ifstream file(filename);
+	Assert(file, ExcFileNotOpen(filename.c_str()));
+	grid_in.read_ucd(file);
+      }  
+
+      boundary_ids = triangulation.get_boundary_ids(); 
+      
+      /*  
     std::vector<unsigned int> numRepetitions;
     numRepetitions.push_back(XSubRf); // x refinement
     numRepetitions.push_back(YSubRf); // y refinement
-    numRepetitions.push_back(ZSubRf); // Z refinement
-
-    Point<3> p1 (0,0,0);
-    //Point<3> p2 (problem_Length,problem_Width,problem_Height);
-    Point<3> p2 (problem_Length,problem_Height,problem_Width);
-    
+    // numRepetitions.push_back(ZSubRf); // Z refinement
+ 
+    Point<2> p1 (0,0);
+    Point<2> p2 (problemWidth,problemHeight);
+   
     GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
+    //GridGenerator::channel_with_cylinder(triangulation,0.03,2,2.0,true)
+    //GridGenerator::hyper_cube_with_cylindrical_hole(triangulation,.25,.5,5.0,1,true ); 	
+    */
+    
+    
     triangulation.refine_global (globalRefinementFactor); //global refinement
     setup_system(); //initial setup
-    refine_grid(); //adative refinement
+    //refine_grid(); //adative refinement
     
     //setup initial conditions
     VectorTools::interpolate(dof_handler, InitalConditions<dim>(), U); Un=U;
     
     //sync ghost vectors to non-ghost vectors
-    UGhost=U;  UnGhost=Un;
+    UGhost=U;  UnGhost=Un; UnnGhost=Unn;
     output_results (0);
 
     //Time stepping
@@ -515,7 +547,7 @@ namespace phaseField1
       solve();
       output_results(currentIncrement);
       pcout << std::endl;
-      refine_grid(); //adative refinement
+      //refine_grid(); //adative refinement
     }
     //computing_timer.print_summary ();
   }
@@ -528,7 +560,7 @@ int main(int argc, char *argv[]){
       using namespace dealii;
       using namespace phaseField1;
       Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
-      phaseField<3> problem;
+      phaseField<2> problem;
       problem.run ();
     }
   catch (std::exception &exc)

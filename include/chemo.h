@@ -21,33 +21,46 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   
   //Velocity and Pressure  
   dealii::Table<1,Sacado::Fad::DFad<double> > ux(n_q_points), uy(n_q_points);
-  dealii::Table<1,double> ux_conv(n_q_points),ux_conv_conv(n_q_points), ux_star(n_q_points);
-  dealii::Table<1,double> uy_conv(n_q_points),uy_conv_conv(n_q_points), uy_star(n_q_points);
+  dealii::Table<1,double> ux_conv(n_q_points),ux_conv_conv(n_q_points),ux_star(n_q_points);
+  dealii::Table<2,double> ux_conv_j(n_q_points,dim),ux_conv_conv_j(n_q_points,dim),ux_star_j(n_q_points,dim);
+  
+  dealii::Table<1,double> uy_conv(n_q_points),uy_conv_conv(n_q_points),uy_star(n_q_points);
+  dealii::Table<2,double> uy_conv_j(n_q_points,dim),uy_conv_conv_j(n_q_points,dim),uy_star_j(n_q_points,dim);
+  
   dealii::Table<1,double> press_conv(n_q_points), phi_conv(n_q_points), phi_conv_conv(n_q_points);
   dealii::Table<2,Sacado::Fad::DFad<double> > press_conv_j(n_q_points, dim), phi_conv_j(n_q_points,dim),phi_conv_conv_j(n_q_points,dim) ;
   dealii::Table<2,Sacado::Fad::DFad<double> > ux_j(n_q_points, dim), uy_j(n_q_points,dim);
-  dealii::Table<2,double> grad_press_intm(n_q_points,dim);
+
   //Interpolate on all cells 
   for (unsigned int q=0; q<n_q_points; ++q) {  
     ux[q]=0.0; uy[q]=0.0;
     ux_conv[q]=0; ux_conv_conv[q]=0, ux_star[q]=0;
     uy_conv[q]=0; uy_conv_conv[q]=0, uy_star[q]=0;
     //press_conv[q]=0; phi_conv[q]=0; phi_conv_conv[q]=0;
-    
+    ux_star[q]=0;uy_star[q]=0;
     for (unsigned int j=0; j<dim; j++) {
       ux_j[q][j]=0.0;
-      uy_j[q][j]=0.0;      
+      uy_j[q][j]=0.0;
+      ux_conv_j[q][j]=0.0;
+      ux_conv_conv_j[q][j]=0.0;
+      ux_star_j[q][j]=0;
+      uy_conv_j[q][j]=0.0;
+      uy_conv_conv_j[q][j]=0.0;
+      uy_star_j[q][j]=0;
     }
     
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
       if (ck==0) {
 	ux[q]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
-	ux_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	ux_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];       	
 	ux_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];
-	ux_star[q]+=2*ux_conv[q]-ux_conv_conv[q];
+	//ux_star[q]+=2*ux_conv[q]-ux_conv_conv[q];
 	for (unsigned int j=0; j<dim; j++) {
-	  ux_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];	  
+	  ux_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];	
+	  ux_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	  ux_conv_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConvConv[i];
+	  //ux_star_j[q][j]+=2.0*ux_conv_j[q][j]-ux_conv_conv_j[q][j];
 	}		
       }
 
@@ -55,19 +68,20 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	uy[q]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
 	uy_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 	uy_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];
-	uy_star[q]+=2*uy_conv[q]-uy_conv_conv[q];
-
-	
+	//uy_star[q]+=2*uy_conv[q]-uy_conv_conv[q];	
 	for (unsigned int j=0; j<dim; j++) {
-	  uy_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];	  
+	  uy_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
+	  uy_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	  uy_conv_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConvConv[i];
+	  //uy_star_j[q][j]+=2.0*uy_conv_j[q][j]-uy_conv_conv_j[q][j];
 	}		
       }
 
       else if (ck==2) {
-	//press_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	press_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 
 	for (unsigned int j=0; j<dim; j++) {
-	  press_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];	  
+	   press_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];	  
 	}
 	
       }
@@ -118,24 +132,27 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //evaluate Residual on cell
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-    Sacado::Fad::DFad<double>  KK_T,CC_T;
+   
         
     for (unsigned int q=0; q<n_q_points; ++q) {        
       if (ck==0) {
 	//Mass term
-	R[i] +=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3*ux[q]-4*ux_conv[q]+4*ux_conv_conv[q])*fe_values.JxW(q);	
-
-	
+	R[i] +=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3*ux[q]-4*ux_conv[q]+4*ux_conv_conv[q])*fe_values.JxW(q);
 	//laplacian term
 	for (unsigned int j = 0; j < dim; j++){
 	  R[i] +=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(ux_j[q][j])*fe_values.JxW(q);
 	}
 	//advection term
 	//First part
+	ux_star[q]=2.0*ux_conv[q]-ux_conv_conv[q];
+	uy_star[q]=2.0*uy_conv[q]-uy_conv_conv[q];  
 	R[i] +=fe_values.shape_value_component(i, q, ck)*(ux_star[q])*(ux_j[q][0])*fe_values.JxW(q);
 	R[i] +=fe_values.shape_value_component(i, q, ck)*(uy_star[q])*(ux_j[q][1])*fe_values.JxW(q);
 	//second part
-	R[i] +=0.5*fe_values.shape_value_component(i, q, ck)*(ux[q])*(ux_j[q][0]+ux_j[q][1])*fe_values.JxW(q);	
+	ux_star_j[q][0]=2.0*ux_conv_j[q][0]-ux_conv_conv_j[q][0];
+	ux_star_j[q][1]=2.0*ux_conv_j[q][1]-ux_conv_conv_j[q][1];
+	
+	R[i] +=0.5*fe_values.shape_value_component(i, q, ck)*(ux[q])*(ux_star_j[q][0]+ux_star_j[q][1])*fe_values.JxW(q);	
       }
 
       else if (ck==1) {						
@@ -148,21 +165,27 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	}
 	//advection term
 	//First part
+	ux_star[q]=2.0*ux_conv[q]-ux_conv_conv[q];
+	uy_star[q]=2.0*uy_conv[q]-uy_conv_conv[q];  
 	R[i] +=fe_values.shape_value_component(i, q, ck)*(ux_star[q])*(uy_j[q][0])*fe_values.JxW(q);
 	R[i] +=fe_values.shape_value_component(i, q, ck)*(uy_star[q])*(uy_j[q][1])*fe_values.JxW(q);
 	//second part
-	R[i] +=0.5*fe_values.shape_value_component(i, q, ck)*(uy[q])*(uy_j[q][0]+uy_j[q][1])*fe_values.JxW(q);	
+	uy_star_j[q][0]=2.0*uy_conv_j[q][0]-uy_conv_conv_j[q][0];
+	uy_star_j[q][1]=2.0*uy_conv_j[q][1]-uy_conv_conv_j[q][1];		
+	R[i] +=0.5*fe_values.shape_value_component(i, q, ck)*(uy[q])*(uy_star_j[q][0]+uy_star_j[q][1])*fe_values.JxW(q);	
       }
       
-      else if (ck==2) {
-
-	for (unsigned int j = 0; j < dim; j++){
-	  R[i] +=fe_values.shape_grad_component(i, q, ck)[j]*(press_conv_j[q][j])*fe_values.JxW(q);
-	  R[i] +=(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_conv_j[q][j])*fe_values.JxW(q);
-	  R[i] +=(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_conv_conv_j[q][j])*fe_values.JxW(q);
-	}
-	
+      else if (ck==0) {
+	R[i] +=fe_values.shape_grad_component(i, q, 2)[0]*(press_conv_j[q][0])*fe_values.JxW(q);
+	R[i] +=(4.0/3.0)*fe_values.shape_grad_component(i, q, 3)[0]*(phi_conv_j[q][0])*fe_values.JxW(q);
+	R[i] +=(-1.0/3.0)*fe_values.shape_grad_component(i, q, 3)[0]*(phi_conv_conv_j[q][0])*fe_values.JxW(q);	
       }
+
+      else if (ck==1) {
+	R[i] +=fe_values.shape_grad_component(i, q, 2)[1]*(press_conv_j[q][1])*fe_values.JxW(q);
+	R[i] +=(4.0/3.0)*fe_values.shape_grad_component(i, q, 3)[1]*(phi_conv_j[q][1])*fe_values.JxW(q);
+	R[i] +=(-1.0/3.0)*fe_values.shape_grad_component(i, q, 3)[1]*(phi_conv_conv_j[q][1])*fe_values.JxW(q);	
+      } 
       
       
      

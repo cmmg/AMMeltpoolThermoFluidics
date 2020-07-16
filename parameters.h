@@ -23,8 +23,7 @@
 #define ZSubRf 1
 
 //Kinematic viscosity
-#define nu 1.0/100.0
-
+#define nu 1.0
 
 
 

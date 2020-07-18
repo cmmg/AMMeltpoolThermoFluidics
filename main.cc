@@ -31,7 +31,8 @@ namespace phaseField1
     }
     
   };
-  
+
+                                    
   template <int dim>
   class phaseField{
   public:
@@ -55,7 +56,7 @@ namespace phaseField1
     IndexSet                                  locally_relevant_dofs;
     ConstraintMatrix                          constraints, constraintsZero;
     LA::MPI::SparseMatrix                     system_matrix;
-    LA::MPI::Vector                           locally_relevant_solution, U, Un, UGhost, UnGhost, dU;
+    LA::MPI::Vector                           locally_relevant_solution, U, Un, UGhost, UnGhost, dU,updated_UnGhost, updated_Un;
     LA::MPI::Vector                           Unn, UnnGhost; 
     LA::MPI::Vector                           system_rhs;
     ConditionalOStream                        pcout;
@@ -131,15 +132,16 @@ namespace phaseField1
     VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uBCW);
 
     //outlet
-    // VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBCO);
-    //VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBCO);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBCO);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBCO);
 
 
     //inlet
-    std::vector<double> inletValue (dim);
+    std::vector<double> inletValue (DIMS);
     inletValue[0]=1.0;
     inletValue[1]=0.0;
-    
+    inletValue[2]=0.0;
+    inletValue[3]=0.0;
     VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(inletValue), constraints,uBCI);
     VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCI);
     
@@ -190,6 +192,8 @@ namespace phaseField1
     Un.reinit (locally_owned_dofs, mpi_communicator);
     dU.reinit (locally_owned_dofs, mpi_communicator);
 
+    updated_Un.reinit (locally_owned_dofs, mpi_communicator);
+
     
     Unn.reinit (locally_owned_dofs, mpi_communicator);
     
@@ -198,7 +202,11 @@ namespace phaseField1
     UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
 
     UnnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
-    
+
+    UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+
+    updated_UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions(0);
     
@@ -289,8 +297,8 @@ namespace phaseField1
 	  if (std::abs(UGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
 	  else{ULocal[i]=UGhost(local_dof_indices[i]);}
 	  ULocal[i].diff (i, dofs_per_cell);
-	  ULocalConv[i]= UnGhost(local_dof_indices[i]);
-
+	  if(currentTime==0) {ULocalConv[i]= UnGhost(local_dof_indices[i]);}
+	  //else if (currentTime>0) {ULocalConv[i]= updated_UnGhost(local_dof_indices[i]); }
 	  ULocalConvConv[i]= UnnGhost(local_dof_indices[i]);
 	}
 
@@ -301,7 +309,7 @@ namespace phaseField1
 	 
 	//populate residual vctor 
 	//residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime);
-	 residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv, R, currentTime, totalTime);
+	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv, R, currentTime, totalTime);
 	       		
 	//evaluate Residual(R) and Jacobian(R')
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
@@ -322,7 +330,7 @@ namespace phaseField1
       }
     system_matrix.compress (VectorOperation::add);
     system_rhs.compress (VectorOperation::add);
-    //pcout << "\nK norm is: " << system_matrix.frobenius_norm() << std::endl; 
+   if(isnan(system_matrix.frobenius_norm())) pcout << "\nK norm diffusion has a nan: " << system_matrix.frobenius_norm() << std::endl; 
   }
 
 
@@ -355,23 +363,28 @@ namespace phaseField1
 	cell->get_dof_indices (local_dof_indices);
 	 //AD variables
 	Table<1, Sacado::Fad::DFad<double> > ULocal(dofs_per_cell); Table<1, double > ULocalConv(dofs_per_cell);
+	Table<1, Sacado::Fad::DFad<double> > Pr_ULocal(dofs_per_cell); Table<1, double > Pr_ULocalConv(dofs_per_cell);
 	
 	for (unsigned int i=0; i<dofs_per_cell; ++i){
-	  if (std::abs(Pr_UGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
-	  else{ULocal[i]=Pr_UGhost(local_dof_indices[i]);}
+	  if (std::abs(Pr_UGhost(local_dof_indices[i]))<1.0e-16){Pr_ULocal[i]=0.0;}	  
+	  else{Pr_ULocal[i]=Pr_UGhost(local_dof_indices[i]);}
+	  Pr_ULocal[i].diff (i, dofs_per_cell);
+	  Pr_ULocalConv[i]= Pr_UnGhost(local_dof_indices[i]);
+
+	  if (std::abs(UGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
+	  else{ULocal[i]=UGhost(local_dof_indices[i]);}
 	  ULocal[i].diff (i, dofs_per_cell);
-	  ULocalConv[i]= Pr_UnGhost(local_dof_indices[i]);
-	  
+	  ULocalConv[i]= UnGhost(local_dof_indices[i]);	  
 	}
+
 
 	//setup residual vector
 	Table<1, Sacado::Fad::DFad<double> > Rp(dofs_per_cell); 
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {Rp[i]=0.0;}
-	
-	 
+		 
 	//populate residual vctor 
 	//residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime);
-	 residualForProjection(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv,  Rp, currentTime, totalTime);
+	residualForProjection(fe_values, 0, fe_face_values, cell, dt, ULocal, Pr_ULocal, ULocalConv, Pr_ULocalConv, Rp, currentTime, totalTime);
 	       		
 	//evaluate Residual(R) and Jacobian(R')
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
@@ -392,77 +405,11 @@ namespace phaseField1
       }
     Pr_system_matrix.compress (VectorOperation::add);
     Pr_system_rhs.compress (VectorOperation::add);
-    //pcout << "\nK norm is: " << system_matrix.frobenius_norm() << std::endl; 
+    // pcout << "\nK norm projection is: " << Pr_system_matrix.frobenius_norm() << std::endl;
+    if(isnan(Pr_system_matrix.frobenius_norm())) pcout << "\nK norm diffusion has a nan: " << system_matrix.frobenius_norm() << std::endl;
+
   }
 
-
-  //Adaptive grid refinement
-  template <int dim>
-  void phaseField<dim>::update_pressure ()  {
-    Un+=Pr_Un;
-    //UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
-    UnGhost=Un;
-    
-    /*
-    // TimerOutput::Scope t(computing_timer, "adaptiveRefinement");
-    const QGauss<dim>  quadrature_formula(FEOrder+2);
-    FEValues<dim> fe_values (fe, quadrature_formula,
-                             update_values    |  update_gradients |
-                             update_quadrature_points);
-    unsigned int dofs_per_cell= fe_values.dofs_per_cell;
-    unsigned int n_q_points= fe_values.n_quadrature_points;
-
-    std::vector<Vector<double> > quadSolDiffusion,quadSolProjection;
-    for (unsigned int q=0; q<n_q_points; ++q){
-      quadSolDiffusion.push_back(dealii::Vector<double>(DIMS)); //2 since there are two degree of freedom per cell
-      quadSolProjection.push_back(dealii::Vector<double>(DIMS)); //2 since there are two degree of freedom per cell
-    }
-   
-    typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(), endc = dof_handler.end();
-    typename parallel::distributed::Triangulation<dim>::active_cell_iterator t_cell = triangulation.begin_active();
-
-    for (;cell!=endc; ++cell) {
-   
-      if (cell->is_locally_owned() ) {
-
-	fe_values.reinit(cell);
-	fe_values.get_function_values(UnGhost, quadSolDiffusion);
-	//	fe_values2.get_function_gradients(UnGhost2, quadGrad2);	
-
-
-	fe_values.get_function_values(Pr_UnGhost, quadSolProjection);
-	//fe_values2.get_function_gradients(UnGhost, quadGradCoarse);
-	dealii::Table<1,double>  press(n_q_points2), PHI(n_q_points2) ; 
-	dealii::Table<1,double>  PHI_OF_DIFF(n_q_points2) ;
-	
-	
-	
-	for (unsigned int i=0; i<dofs_per_cell; ++i) {
-	  for (unsigned int q=0; q<n_q_points; ++q) {	    	    
-	    const unsigned int ck = fe_values2.get_fe().system_to_component_index(i).first - 0;
-	    if (ck==2) {	      
-	      quadSolDiffusion[q][ck]+=quadSolProjection[q][ck+1];
-	    }
-
-	    if (ck==3) {	      
-	      quadSolDiffusion[q][ck]=quadSolProjection[q][ck];
-	    }
-	    
-	  }
-	  
-	}
-	
-	
-      }
-      ++t_cell;
-
-      } */
-    
-    
-                  
-  }
-
-  
  
   //Solve
   template <int dim>
@@ -471,7 +418,9 @@ namespace phaseField1
     LA::MPI::Vector completely_distributed_solution (locally_owned_dofs, mpi_communicator);
     
       if(lever) {
-    //Iterative solvers from Petsc and Trilinos
+	
+		
+	//Iterative solvers from Petsc and Trilinos
     SolverControl solver_control (dof_handler.n_dofs(), 1e-12);
 #ifdef USE_PETSC_LA
     LA::SolverGMRES solver(solver_control, mpi_communicator);
@@ -480,8 +429,8 @@ namespace phaseField1
 #endif
     LA::MPI::PreconditionAMG preconditioner;
     LA::MPI::PreconditionAMG::AdditionalData data;
-#ifdef USE_PETSC_LA dof_handler.get_fe().n_components()
-    //data.symmetric_operator = true;
+#ifdef USE_PETSC_LA //dof_handler.get_fe().n_components()
+    data.symmetric_operator = true;
 #else
     // Trilinos defaults are good 
 #endif
@@ -491,21 +440,25 @@ namespace phaseField1
     solver.solve (system_matrix, completely_distributed_solution, system_rhs, preconditioner);
     pcout << "   Solved in " << solver_control.last_step()
           << " iterations." << std::endl;
-     //Direct solver MUMPS
-    //SolverControl cn;
-    //PETScWrappers::SparseDirectMUMPS solver(cn, mpi_communicator);
-    //solver.set_symmetric_mode(false);
-    //solver.solve(system_matrix, completely_distributed_solution, system_rhs);
-    
-    if ((currentIteration==0)&&(currentIncrement==1)){
-      constraintsZero.distribute (completely_distributed_solution);
-    }
-    else{
-      constraints.distribute (completely_distributed_solution);
-    }
-    
-      }
+	
 
+	/*
+	//	Direct solver MUMPS
+	SolverControl cn;
+	PETScWrappers::SparseDirectMUMPS solver(cn, mpi_communicator);
+	solver.set_symmetric_mode(false);
+	solver.solve(system_matrix, completely_distributed_solution, system_rhs);
+	*/
+	
+	if ((currentIteration==0)&&(currentIncrement==1)){
+	  constraintsZero.distribute (completely_distributed_solution);
+	}
+	else{
+	  constraints.distribute (completely_distributed_solution);
+	}
+	
+      }
+      
     
     //if lever is false run for projection part
       else if (!lever) {
@@ -578,8 +531,9 @@ namespace phaseField1
     double machineEPS=1.0e-15;
     currentIteration=0;
     char buffer[200];    
-
+    
     if(lever) {
+      
       pcout << "Solving for diffusion "<<std::endl;
     while (true){
       if (currentIteration>=25){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
@@ -593,9 +547,10 @@ namespace phaseField1
       solveIteration(true);
       U+=dU; UGhost=U; 
       ++currentIteration;
-    }     
-    Unn=Un;UnnGhost=Unn;    
-    Un=U; UnGhost=Un;
+    }
+    Unn=Un;UnnGhost=Unn;  //previous to previous time step converged solution  
+    Un=U;  //this step converged solution copied and this will get updated in update pressure
+    UnGhost=Un;
     }
 
     else if(!lever) {
@@ -613,10 +568,72 @@ namespace phaseField1
       Pr_U+=Pr_dU; Pr_UGhost=Pr_U; 
       ++currentIteration;
     }     
-    Pr_Un=Pr_U; Pr_UnGhost=Pr_Un;      
-    }    
+     Pr_Un=Pr_U; Pr_UnGhost=Pr_Un;   
+    }
+  
   }
 
+
+  
+  //Adaptive grid refinement
+  template <int dim>
+  void phaseField<dim>::update_pressure ()  {
+    //Un+=Pr_Un;
+    //UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+    //UnGhost=Un;
+    //applyBoundaryConditions(0);
+
+    
+    // TimerOutput::Scope t(computing_timer, "adaptiveRefinement");
+    const QGauss<dim>  quadrature_formula(FEOrder+2);
+    FEValues<dim> fe_values (fe, quadrature_formula,
+                             update_values    |  update_gradients |
+                             update_quadrature_points);
+    unsigned int dofs_per_cell= fe_values.dofs_per_cell;
+    unsigned int n_q_points= fe_values.n_quadrature_points;
+
+    std::vector<Vector<double> > quadSolDiffusion,quadSolProjection;
+    for (unsigned int q=0; q<n_q_points; ++q){
+      quadSolDiffusion.push_back(dealii::Vector<double>(DIMS)); //2 since there are two degree of freedom per cell
+      quadSolProjection.push_back(dealii::Vector<double>(DIMS)); //2 since there are two degree of freedom per cell
+    }
+   
+    typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(), endc = dof_handler.end();
+    typename parallel::distributed::Triangulation<dim>::active_cell_iterator t_cell = triangulation.begin_active();
+   
+    std::vector<unsigned int> local_dof_indices (dofs_per_cell);
+    for (;cell!=endc; ++cell) {
+      
+      if (cell->is_locally_owned() ) {
+
+	fe_values.reinit (cell);
+        
+        cell->get_dof_indices (local_dof_indices);
+         //AD variables	
+
+	for (unsigned int i=0; i<dofs_per_cell; ++i) {	   
+	    const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - 0;
+	    if (ck==2) {
+	      Un(local_dof_indices[i])+=Pr_UnGhost(local_dof_indices[i]);
+	    }
+	    
+	    if (ck==3) {	  
+	      Un(local_dof_indices[i])+=Pr_UnGhost(local_dof_indices[i]);			    
+	    }
+
+	}
+	
+	
+      }
+      ++t_cell;
+
+      } 
+
+    Un.compress(VectorOperation::add);  	    	              	  	 	    
+	    
+  }
+
+  
   //Output
   template <int dim>
   void phaseField<dim>::output_results (const unsigned int cycle) {
@@ -656,108 +673,7 @@ namespace phaseField1
     }
   }
 
-  /*
-  //Adaptive grid refinement
-  template <int dim>
-  void phaseField<dim>::refine_grid (){
-    TimerOutput::Scope t(computing_timer, "adaptiveRefinement");
-    const QGauss<dim>  quadrature_formula(FEOrder+2);
-    FEValues<dim> fe_values (fe, quadrature_formula,
-                             update_values    |  update_gradients |
-                             update_quadrature_points);
-    unsigned int dofs_per_cell= fe_values.dofs_per_cell;
-    unsigned int n_q_points= fe_values.n_quadrature_points;
-
-    //laser source based adaptivity
-    double laserLocationX=VV*currentTime;
-    double laserLocationY=problem_Height;
-    double laserLocationZ=problem_Width*0.5;
-    double laserRadius=spotRadius;
-
-    char buffer[200];
-    sprintf(buffer, "laser source at: (%7.3e, %7.3e,%7.3e)\n",laserLocationX,laserLocationY,laserLocationZ);
-    pcout << buffer;
-
-    std::vector<Vector<double> > quadSolutions;
-    for (unsigned int q=0; q<n_q_points; ++q){
-      quadSolutions.push_back(dealii::Vector<double>(2)); //2 since there are two degree of freedom per cell
-    }
-
-    bool checkForFurtherRefinement=true;
-    while (checkForFurtherRefinement){ 
-      bool isMeshRefined=false;
-      typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(), endc = dof_handler.end();
-      typename parallel::distributed::Triangulation<dim>::active_cell_iterator t_cell = triangulation.begin_active();
-      for (;cell!=endc; ++cell){
-	if (cell->is_locally_owned()){
-	  fe_values.reinit (cell);
-	  fe_values.get_function_values(UnGhost, quadSolutions);
-	  
-	  //limit the maximal and minimal refinement depth of the mesh
-	  unsigned int current_level = t_cell->level();
-
-	  // Mark qPoins where refinement is to be done using bool.
-	  bool mark_refine = false, mark_refine_liquid=false;
-	  for (unsigned int q=0; q<n_q_points; ++q){
-	    Point<dim> qPoint=fe_values.quadrature_point(q);
-	    if ((qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*2.5) && (qPoint[1]>(laserLocationY-laserRadius*0.5))){
-	      mark_refine=true; //set refine
-	      if (qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*0.5){
-		mark_refine_liquid=true;
-	      }
-	      break;
-	    }
-	  }
-	  
-	  if ( (mark_refine && mark_refine_liquid && (current_level < (maxRefinementLevel)))){
-	    cell->set_refine_flag(); isMeshRefined=true; //refine
-	  }
-	  else if ( (mark_refine && (current_level < maxRefinementLevel))){
-	    cell->set_refine_flag(); isMeshRefined=true; //refine
-	  }
-	  else if (!mark_refine && (current_level > minRefinementLevel)) {
-	    cell->set_coarsen_flag(); isMeshRefined=true; //coarsen previously refined
-	  }
-	}
-	++t_cell;
-      }
-      
-      //check for blocking in MPI
-      double checkSum=0.0;
-      if (isMeshRefined){checkSum=1.0;}
-      checkSum= Utilities::MPI::sum(checkSum, mpi_communicator); //checkSum is greater then 0, then all processors call adative refinement shown below
-      //
-      if (checkSum>0.0){
-	//execute refinement
-	parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector> soltrans(dof_handler);
-	
-	// prepare the triangulation,
-	triangulation.prepare_coarsening_and_refinement();
-	
-	// prepare the SolutionTransfer object for coarsening and refinement
-	// and give the solution vector that we intend to interpolate later,
-	soltrans.prepare_for_coarsening_and_refinement(UnGhost);
-	
-	// actually execute the refinement,
-	triangulation.execute_coarsening_and_refinement ();
-	
-	//reset dof's, vectors, matrices, constraints, etc. all on the new mesh.
-	setup_system();
-	
-	// and interpolate all the solutions on the new mesh from the old mesh solution
-	soltrans.interpolate(Un);
-	U=Un; UGhost=U; UnGhost=Un;
-	UGhost.update_ghost_values();
-	UnGhost.update_ghost_values();
-	//set flag for another check of refinement
-	checkForFurtherRefinement=false;
-      }
-      else{
-	checkForFurtherRefinement=false;
-      }
-    }
-    } */
-  
+   
 
     //Solve problem
   template <int dim>
@@ -796,9 +712,14 @@ namespace phaseField1
     
     //setup initial conditions
     VectorTools::interpolate(dof_handler, InitalConditions<dim>(), U); Un=U;
+    Unn=Un;
+    VectorTools::interpolate(dof_handler, InitalConditions<dim>(), Pr_U); Pr_Un=Pr_U;
     
+    //VectorTools::interpolate(dof_handler, InitalConditions<dim>(), Pr_U); Pr_Un=Pr_U;
     //sync ghost vectors to non-ghost vectors
-    UGhost=U;  UnGhost=Un; UnnGhost=Unn;
+    UGhost=U;
+    UnGhost=Un;
+    UnnGhost=Unn; 
     Pr_UGhost=Pr_U; Pr_UnGhost=Pr_Un;
     output_results (0);
 
@@ -806,9 +727,12 @@ namespace phaseField1
     currentIncrement=0;
     for (currentTime=0; currentTime<totalTime; currentTime+=dt){
       currentIncrement++;
+      pcout << std::endl;
       solve(true); //for diffusion solve
+      pcout << std::endl;
       solve(false);// for projection solve
       update_pressure();
+      UnGhost=Un;
       output_results(currentIncrement);
       pcout << std::endl;
       //refine_grid(); //adative refinement

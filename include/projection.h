@@ -12,7 +12,7 @@
 
 //Chemistry residual implementation
 template <int dim>
-void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<dim>& fe_face_values, const typename DoFHandler<dim>::active_cell_iterator &cell, double dt, dealii::Table<1, Sacado::Fad::DFad<double> >& ULocal, dealii::Table<1, double>& ULocalConv, dealii::Table<1, Sacado::Fad::DFad<double> >& Rp, double currentTime, double totalTime) {
+void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<dim>& fe_face_values, const typename DoFHandler<dim>::active_cell_iterator &cell, double dt, dealii::Table<1, Sacado::Fad::DFad<double> >& ULocal, dealii::Table<1, Sacado::Fad::DFad<double> >& Pr_ULocal, dealii::Table<1, double>& ULocalConv, dealii::Table<1, double>& Pr_ULocalConv, dealii::Table<1, Sacado::Fad::DFad<double> >& Rp, double currentTime, double totalTime) {
   unsigned int dofs_per_cell= fe_values.dofs_per_cell;
   unsigned int n_q_points= fe_values.n_quadrature_points;
   
@@ -47,7 +47,7 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
 
       else if (ck==3) {
 	for (unsigned int j=0; j<dim; j++) {
-	   phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];	  
+	   phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];	  
 	}	
       }
                  
@@ -91,10 +91,10 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
       
       if (ck==3) {
 	for (unsigned int j=0; j<dim; j++) {
-	Rp[i]+=-fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);
+	  Rp[i]+=-fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);
 	}
-	Rp[i]+=-(3.0/2.0/dt)*fe_values.shape_value_component(i, q, 0)*(ux_conv_j[q][0])*fe_values.JxW(q);
-	Rp[i]+=-(3.0/2.0/dt)*fe_values.shape_value_component(i, q, 1)*(uy_conv_j[q][1])*fe_values.JxW(q);
+	Rp[i]+=-(3.0/2.0/dt)*fe_values.shape_value_component(i, q, ck)*(ux_conv_j[q][0])*fe_values.JxW(q);
+	Rp[i]+=-(3.0/2.0/dt)*fe_values.shape_value_component(i, q, ck)*(uy_conv_j[q][1])*fe_values.JxW(q);
       } 
       
       

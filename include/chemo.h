@@ -14,6 +14,7 @@
 template <int dim>
 void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<dim>& fe_face_values, const typename DoFHandler<dim>::active_cell_iterator &cell, double dt, dealii::Table<1, Sacado::Fad::DFad<double> >& ULocal, dealii::Table<1, double>& ULocalConv, dealii::Table<1, double>& ULocalConvConv, dealii::Table<1, Sacado::Fad::DFad<double> >& R, double currentTime, double totalTime) {
   unsigned int dofs_per_cell= fe_values.dofs_per_cell;
+  //std::cout<<"what is dof per cell "<<dofs_per_cell << std::endl; 
   unsigned int n_q_points= fe_values.n_quadrature_points;
   
   unsigned int n_q_points_face= fe_face_values.n_quadrature_points;
@@ -27,7 +28,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   dealii::Table<1,double> uy_conv(n_q_points),uy_conv_conv(n_q_points),uy_star(n_q_points);
   dealii::Table<2,double> uy_conv_j(n_q_points,dim),uy_conv_conv_j(n_q_points,dim),uy_star_j(n_q_points,dim);
   
-  dealii::Table<1,double> press_conv(n_q_points), phi_conv(n_q_points), phi_conv_conv(n_q_points);
+  dealii::Table<1,double> press_conv(n_q_points), phi_conv(n_q_points), phi_conv_conv(n_q_points),up_phi_conv(n_q_points);
   dealii::Table<2,Sacado::Fad::DFad<double> > press_conv_j(n_q_points, dim), phi_conv_j(n_q_points,dim),phi_conv_conv_j(n_q_points,dim) ;
   dealii::Table<2,Sacado::Fad::DFad<double> > ux_j(n_q_points, dim), uy_j(n_q_points,dim);
 
@@ -36,7 +37,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     ux[q]=0.0; uy[q]=0.0;
     ux_conv[q]=0; ux_conv_conv[q]=0, ux_star[q]=0;
     uy_conv[q]=0; uy_conv_conv[q]=0, uy_star[q]=0;
-    //press_conv[q]=0; phi_conv[q]=0; phi_conv_conv[q]=0;
+    press_conv[q]=0; phi_conv[q]=0; phi_conv_conv[q]=0;
     ux_star[q]=0;uy_star[q]=0;
     for (unsigned int j=0; j<dim; j++) {
       ux_j[q][j]=0.0;
@@ -79,9 +80,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 
       else if (ck==2) {
 	press_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
-
 	for (unsigned int j=0; j<dim; j++) {
-	   press_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];	  
+	  press_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];	  
 	}
 	
       }
@@ -174,18 +174,19 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	uy_star_j[q][1]=2.0*uy_conv_j[q][1]-uy_conv_conv_j[q][1];		
 	R[i] +=0.5*fe_values.shape_value_component(i, q, ck)*(uy[q])*(uy_star_j[q][0]+uy_star_j[q][1])*fe_values.JxW(q);	
       }
-      
+            
       else if (ck==0) {
-	R[i] +=fe_values.shape_grad_component(i, q, 2)[0]*(press_conv_j[q][0])*fe_values.JxW(q);
-	R[i] +=(4.0/3.0)*fe_values.shape_grad_component(i, q, 3)[0]*(phi_conv_j[q][0])*fe_values.JxW(q);
-	R[i] +=(-1.0/3.0)*fe_values.shape_grad_component(i, q, 3)[0]*(phi_conv_conv_j[q][0])*fe_values.JxW(q);	
+	R[i] +=-fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
+	R[i] +=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	R[i] +=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);	
       }
 
       else if (ck==1) {
-	R[i] +=fe_values.shape_grad_component(i, q, 2)[1]*(press_conv_j[q][1])*fe_values.JxW(q);
-	R[i] +=(4.0/3.0)*fe_values.shape_grad_component(i, q, 3)[1]*(phi_conv_j[q][1])*fe_values.JxW(q);
-	R[i] +=(-1.0/3.0)*fe_values.shape_grad_component(i, q, 3)[1]*(phi_conv_conv_j[q][1])*fe_values.JxW(q);	
-      } 
+	R[i] +=-fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);	
+	R[i] +=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	R[i] +=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);	
+      }
+      
       
       
      

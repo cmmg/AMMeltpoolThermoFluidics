@@ -12,7 +12,7 @@
 
 //time step controls
 #define TimeStep 5.0e-4
-#define TotalTime 1500*TimeStep
+#define TotalTime 5000*TimeStep
 
 //output controls
 #define outputFileName "solution"

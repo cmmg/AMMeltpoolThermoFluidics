@@ -22,10 +22,11 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   dealii::Table<2,Sacado::Fad::DFad<double> > vel(n_q_points,dim);
   dealii::Table<3,Sacado::Fad::DFad<double> > vel_j(n_q_points,dim,dim);
   dealii::Table<1,double> press_conv(n_q_points),phi_conv(n_q_points),phi_conv_conv(n_q_points);
+  dealii::Table<2,double> press_conv_j(n_q_points,dim),phi_conv_j(n_q_points,dim),phi_conv_conv_j(n_q_points,dim);
+
   dealii::Table<2,double> vel_conv(n_q_points,dim),vel_conv_conv(n_q_points,dim),vel_star(n_q_points,dim);
   dealii::Table<3,double> vel_conv_j(n_q_points,dim,dim),vel_conv_conv_j(n_q_points,dim,dim),vel_star_j(n_q_points,dim,dim);
 
-  dealii::Table<2,Sacado::Fad::DFad<double> > advec_first(n_q_points,dim);
  
   
   //Interpolate on all cells 
@@ -33,7 +34,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     press_conv[q]=0; phi_conv[q]=0; phi_conv_conv[q]=0;        
     //initialization : filling it with zero and later updated
     for (unsigned int j=0; j<dim; j++) {
-      vel[q][j]=0; vel_conv[q][j]=0; vel_conv_conv[q][j]=0; vel_star[q][j]=0;      
+      vel[q][j]=0; vel_conv[q][j]=0; vel_conv_conv[q][j]=0; vel_star[q][j]=0;
+      press_conv_j[q][j]=0; phi_conv_j[q][j]=0; phi_conv_conv_j[q][j]=0;        
       for (unsigned int k=0; k<dim; k++) {
 	vel_j[q][j][k]=0;
 	vel_star_j[q][j][k]=0;
@@ -58,24 +60,33 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 
       else if (ck==2) {
 	press_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	for (unsigned int j=0; j<dim; j++) {
+	  press_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	}
       }
       else if (ck==3) {
 	phi_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 	phi_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];
+
+	for (unsigned int j=0; j<dim; j++) {
+	  phi_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	  phi_conv_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConvConv[i];	  
+	}
       }
       
     }
 
+    /*
     for (unsigned int j=0; j<dim; j++) {
       vel_star[q][j]+=2.0*vel_conv[q][j]-vel_conv_conv[q][j];
       for (unsigned int k=0; k<dim; k++) {
 	vel_star_j[q][j][k]+=2.0*vel_conv_j[q][j][k]-vel_conv_conv_j[q][j][k];
       }    
     }
+    */
         
   }
-
-
+ 
   //evaluate Residual on cell
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;         
@@ -85,24 +96,29 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
 	//Laplace term and pressure
 	for (unsigned int j = 0; j < dim; j++){
-	  R[i]+=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);	
+	  R[i]+=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);		 	  
 	}
+	//gradw*phash
+	//R[i]+=-fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
+	//R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	//R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
 
-	R[i]+=-fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
-	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
-	R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
-	
+	//w*gradPhash
+	R[i]+=fe_values.shape_value_component(i, q, ck)*(press_conv_j[q][ck])*fe_values.JxW(q);
+	R[i]+=(4.0/3.0)*fe_values.shape_value_component(i, q, ck)*(phi_conv_j[q][ck])*fe_values.JxW(q);
+	R[i]+=(-1.0/3.0)*fe_values.shape_value_component(i, q, ck)*(phi_conv_conv_j[q][ck])*fe_values.JxW(q);
+
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
+	  vel_star[q][j]=2.0*vel_conv[q][j]-vel_conv_conv[q][j];
 	  R[i]+=fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);
 	}
-	//second part	
-
-	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][ck][0]*vel[q][ck])*fe_values.JxW(q);
-	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][ck][1]*vel[q][ck])*fe_values.JxW(q);  
-
-	
+	//second part
+	vel_star_j[q][0][0]=2.0*vel_conv_j[q][0][0]-vel_conv_conv_j[q][0][0];
+	vel_star_j[q][1][1]=2.0*vel_conv_j[q][1][1]-vel_conv_conv_j[q][1][1];
+	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);
+	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][1][1]*vel[q][ck])*fe_values.JxW(q);  	
       }
           
                                  

@@ -1,5 +1,5 @@
 //problem geometry, mesh control
-#define DIMS 4 //2
+#define DIMS 3 //2
 #define FEOrder 2
 
 #define problemWidth 25.0  //[2]

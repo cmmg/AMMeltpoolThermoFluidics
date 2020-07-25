@@ -12,7 +12,7 @@
 
 //Chemistry residual implementation
 template <int dim>
-void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<dim>& fe_face_values, const typename DoFHandler<dim>::active_cell_iterator &cell, double dt, dealii::Table<1, Sacado::Fad::DFad<double> >& ULocal, dealii::Table<1, Sacado::Fad::DFad<double> >& Pr_ULocal, dealii::Table<1, double>& ULocalConv, dealii::Table<1, double>& Pr_ULocalConv, dealii::Table<1, Sacado::Fad::DFad<double> >& Rp, double currentTime, double totalTime) {
+void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<dim>& fe_face_values, const typename DoFHandler<dim>::active_cell_iterator &cell, double dt, dealii::Table<1, double >& ULocal, dealii::Table<1, Sacado::Fad::DFad<double> >& Pr_ULocal, dealii::Table<1, double>& ULocalConv, dealii::Table<1, double>& Pr_ULocalConv, dealii::Table<1, Sacado::Fad::DFad<double> >& Rp, double currentTime, double totalTime) {
   unsigned int dofs_per_cell= fe_values.dofs_per_cell;
   unsigned int n_q_points= fe_values.n_quadrature_points;
   
@@ -21,16 +21,28 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
   
   //Velocity and Pressure  
   dealii::Table<2,Sacado::Fad::DFad<double> > phi_j(n_q_points, dim);
-  dealii::Table<3,Sacado::Fad::DFad<double> > vel_j(n_q_points, dim,dim);
+  dealii::Table<2,double> vel_conv(n_q_points, dim);
+
+  //  dealii::Table<3,Sacado::Fad::DFad<double> > vel_j(n_q_points, dim,dim);
   dealii::Table<3,double> vel_conv_j(n_q_points,dim,dim);
-  
+
+  //new Methods where phi is entriely replaced with just p
+  dealii::Table<2,Sacado::Fad::DFad<double> > press_j(n_q_points, dim);
+  dealii::Table<2,double > press_conv_j(n_q_points, dim);  
+  dealii::Table<3,double > vel_j(n_q_points, dim,dim);
+
+
   
   //Interpolate on all cells 
   for (unsigned int q=0; q<n_q_points; ++q) {    
     for (unsigned int j=0; j<dim; j++) {
-      phi_j[q][j]=0;
+      //phi_j[q][j]=0;
+      //vel_conv[q][j]=0;
+      press_j[q][j]=0;
+      press_conv_j[q][j]=0;
+       
       for (unsigned int k=0; k<dim; k++) {
-	vel_conv_j[q][j][k]=0;
+	//vel_conv_j[q][j][k]=0;
 	vel_j[q][j][k]=0;
 	 }      
     }
@@ -39,15 +51,19 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 
       if (ck>=0 && ck < 2) {
+	//vel_conv[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 	for (unsigned int j=0; j<dim; j++) {
 	  vel_conv_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
 	  vel_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
 	}
       }
 
-      else if (ck==3) {
+      else if (ck==2/*ck==3*/) {
 	for (unsigned int j=0; j<dim; j++) {
-	  phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];
+	  //  phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];
+	  //phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];
+	  press_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];
+	  press_conv_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocalConv[i];
 	}	
       }
       
@@ -60,12 +76,18 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;        
     for (unsigned int q=0; q<n_q_points; ++q) {              
-      if (ck==3) {
+      if (ck==2/*ck==3*/) {
 	for (unsigned int j=0; j<dim; j++) {
-	  Rp[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);
+	  //Rp[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);
+	  Rp[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(press_j[q][j])*fe_values.JxW(q);
+	  // Rp[i]+=(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(press_conv_j[q][j])*fe_values.JxW(q);
+	  
 	}
-	Rp[i]+=-(3.0/2.0/dt)*fe_values.shape_value_component(i, q, ck)*(vel_conv_j[q][0][0])*fe_values.JxW(q);
-        Rp[i]+=-(3.0/2.0/dt)*fe_values.shape_value_component(i, q, ck)*(vel_conv_j[q][1][1])*fe_values.JxW(q);
+	Rp[i]+=-(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][0][0])*fe_values.JxW(q);
+        Rp[i]+=-(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][1][1])*fe_values.JxW(q);
+	
+	
+	
       }               
     }
   }

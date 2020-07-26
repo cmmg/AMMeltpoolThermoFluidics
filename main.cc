@@ -23,10 +23,9 @@ namespace phaseField1
     InitalConditions (): Function<dim>(DIMS){ }
     void vector_value (const Point<dim>   &p, Vector<double>   &values) const{
         Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     	
-	values(0)=0.0;
-	values(1)=0.0;
-	values(2)=25.0-p[0];
-	//values(3)=0;
+	values(0)=0.0;  //ux
+	values(1)=0.0; //uy
+	values(2)=25.0-p[0]; //pressure
     }
     
   };
@@ -58,7 +57,7 @@ namespace phaseField1
     LA::MPI::Vector                           locally_relevant_solution, U, Un, UGhost, UnGhost, dU;
     LA::MPI::Vector                           Unn, UnnGhost; 
 
-    LA::MPI::Vector                           Unnn, UnnnGhost;
+
     
     LA::MPI::Vector                           system_rhs;
     ConditionalOStream                        pcout;
@@ -104,16 +103,12 @@ namespace phaseField1
     currentIncrement=0; currentTime=0;
 
     //nodal Solution names
-    //nodal_solution_names.push_back("ux"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-    //nodal_solution_names.push_back("uy"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
 
    for (unsigned int i=0; i<dim; ++i){
       nodal_solution_names.push_back("velocity"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_part_of_vector);
     }
-
    
    nodal_solution_names.push_back("pressure"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-   //nodal_solution_names.push_back("PHI"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
   }
   
   template <int dim>
@@ -133,7 +128,6 @@ namespace phaseField1
     DoFTools::make_hanging_node_constraints (dof_handler, constraintsZero);
     
     //Setup boundary conditions
-    //No Dirchlet BC are necessary for the parabolic problem
     std::vector<bool> uBCI (DIMS, false); uBCI[0]=true;uBCI[1]=true; 
     std::vector<bool> uBCW (DIMS, false); uBCW[0]=true;uBCW[1]=true; 
     std::vector<bool> uBCO (DIMS, false);              uBCO[1]=true; 
@@ -157,7 +151,6 @@ namespace phaseField1
     inletValue[0]=1.0;
     inletValue[1]=0.0;
     inletValue[2]=0.0;
-    //inletValue[3]=0.0;
     VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(inletValue), constraints,uBCI);
     VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCI);
     
@@ -175,35 +168,19 @@ namespace phaseField1
     DoFTools::make_hanging_node_constraints (Pr_dof_handler, Pr_constraintsZero);
     
     //Setup boundary conditions
-    //No Dirchlet BC are necessary for the parabolic problem
     std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
   
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
 
-    //No Dirchlet BC are necessary for the parabolic problem
-    
-    //std::vector<bool> uBCI (DIMS, true); uBCI[0]=true;uBCI[1]=true;
-    //std::vector<bool> uBCW (DIMS, true); //uBCW[0]=true;uBCW[1]=true;
-    //std::vector<bool> uBC (DIMS, false); //uBCO[2]=true; uBCO[3]=true;
-    //uBC[3]=true;
-    
     //outlet
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-    
-    //VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    //VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-
-    //VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    //VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-
-
+       
     Pr_constraints.close ();
     Pr_constraintsZero.close ();
   }
 
-  
-  
+    
   //Setup
   template <int dim>
   void phaseField<dim>::setup_system (){
@@ -212,27 +189,22 @@ namespace phaseField1
     
     locally_owned_dofs = dof_handler.locally_owned_dofs ();
     DoFTools::extract_locally_relevant_dofs (dof_handler,
-                                             locally_relevant_dofs);
-    
+                                             locally_relevant_dofs);  
     locally_relevant_solution.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
 
     //Non-ghost vectors
     system_rhs.reinit (locally_owned_dofs, mpi_communicator);
     U.reinit (locally_owned_dofs, mpi_communicator);
     Un.reinit (locally_owned_dofs, mpi_communicator);
-    dU.reinit (locally_owned_dofs, mpi_communicator);
-    
+    dU.reinit (locally_owned_dofs, mpi_communicator);    
     Unn.reinit (locally_owned_dofs, mpi_communicator);
-    Unnn.reinit (locally_owned_dofs, mpi_communicator);
+    //Unnn.reinit (locally_owned_dofs, mpi_communicator);
+
     //Ghost vectors
     UGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
-
     UnnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
-
-    UnnnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
-
-
+    
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions(0);
     
@@ -279,15 +251,10 @@ namespace phaseField1
     DynamicSparsityPattern Pr_dsp (Pr_locally_relevant_dofs);
     DoFTools::make_sparsity_pattern (Pr_dof_handler, Pr_dsp, Pr_constraints, false);
     SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, Pr_locally_relevant_dofs);
-    Pr_system_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
-   
-    
+    Pr_system_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);       
   }
 
-  
-
-  
-
+   
   //Assembly
   template <int dim>
   void phaseField<dim>::assemble_system (){
@@ -317,8 +284,7 @@ namespace phaseField1
 	cell->get_dof_indices (local_dof_indices);
 	 //AD variables
 	Table<1, Sacado::Fad::DFad<double> > ULocal(dofs_per_cell); Table<1, double > ULocalConv(dofs_per_cell);
-	Table<1, double > ULocalConvConv(dofs_per_cell);	Table<1, double > ULocal3Conv(dofs_per_cell);
-
+	Table<1, double > ULocalConvConv(dofs_per_cell);
 	Table<1, double > Pr_ULocalConv(dofs_per_cell);	Table<1, double > Pr_ULocalConvConv(dofs_per_cell);
 
 	for (unsigned int i=0; i<dofs_per_cell; ++i){
@@ -328,8 +294,6 @@ namespace phaseField1
 	  ULocal[i].diff (i, dofs_per_cell);
 	  ULocalConv[i]= UnGhost(local_dof_indices[i]);	 
 	  ULocalConvConv[i]= UnnGhost(local_dof_indices[i]);
-	  ULocal3Conv[i]= UnnnGhost(local_dof_indices[i]);
-
 	  Pr_ULocalConv[i]= Pr_UnGhost(local_dof_indices[i]);	 
 	  Pr_ULocalConvConv[i]= Pr_UnnGhost(local_dof_indices[i]);
 	}
@@ -338,8 +302,8 @@ namespace phaseField1
 	Table<1, Sacado::Fad::DFad<double> > R(dofs_per_cell); 
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {R[i]=0.0;}
 		 
-	//residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,ULocal3Conv,R,currentTime,totalTime);
-	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,ULocal3Conv,Pr_ULocalConv,Pr_ULocalConvConv, R,currentTime,totalTime);
+	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
+
 	
 	//evaluate Residual(R) and Jacobian(R')
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
@@ -415,8 +379,7 @@ namespace phaseField1
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {Rp[i]=0.0;}
 		 
 	//populate residual vctor 
-	//residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime);
-	residualForProjection(fe_values, 0, fe_face_values, cell, dt, ULocal, Pr_ULocal, ULocalConv, Pr_ULocalConv, Rp, currentTime, totalTime);
+	residualForProjection(fe_values, 0, fe_face_values, cell, dt, ULocal, Pr_ULocal, Rp, currentTime, totalTime);
 	       		
 	//evaluate Residual(R) and Jacobian(R')
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
@@ -658,10 +621,6 @@ namespace phaseField1
      //update values   
   }
 
-
-
-  
-
   
   //Adaptive grid refinement
   template <int dim>
@@ -684,55 +643,22 @@ namespace phaseField1
     typename parallel::distributed::Triangulation<dim>::active_cell_iterator t_cell = triangulation.begin_active();
    
     std::vector<unsigned int> local_dof_indices (dofs_per_cell);
-    std::vector<double> phi_update (dofs_per_cell),press_update(dofs_per_cell),press_update2(dofs_per_cell);
-    std::vector<double> press_update3(dofs_per_cell);
+    std::vector<double> press_update(dofs_per_cell);
     for (;cell!=endc; ++cell) {     
       if (cell->is_locally_owned() ) {
 	fe_values.reinit (cell);        
         cell->get_dof_indices (local_dof_indices);
 	
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
-	  phi_update[i]=0; press_update[i]=0; press_update2[i]=0; press_update3[i]=0;
+	  press_update[i]=0;
 	  const unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;	   
 	  //note value of old pressure  from UGhost	  
 	  if (ci==2) {
-	    //  press_update[i]=UnGhost(local_dof_indices[i]); //old value of pressure is noted
-	    press_update3[i]=Pr_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
-	    press_update3[i]+=UGhost(local_dof_indices[i]); //press_k is noted and added to phi_k+1
-	  }
-
-	  /*
-	  if (ci==3) {
-	    phi_update[i]=Pr_UnGhost(local_dof_indices[i]);//new value of phi is noted
-	    press_update2[i]=Pr_UnGhost(local_dof_indices[i]); //new value of phi is noted in pressupdate2
-	  }
-	  */
+	    press_update[i]=Pr_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
+	    press_update[i]+=UnGhost(local_dof_indices[i]); //press_k is noted and added to phi_k+1
+	    U(local_dof_indices[i])=press_update[i];
+	  }	  
 	}
-	
-	for (unsigned int i=0; i<dofs_per_cell; ++i) {
-	  const unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;	   
-	  //replace value of phi to phi_update
-	  /*
-	  if (ci==3) {
-	   U(local_dof_indices[i])=phi_update[i];
-	  }
-	  */
-
-	  if (ci==2) {
-	   U(local_dof_indices[i])=press_update3[i];
-	  }
-	 
-	  /*
-	  for (unsigned int k=0; k<dofs_per_cell; ++k) {   
-	    const unsigned int ck = fe_values.get_fe().system_to_component_index(k).first - 0;	   
-	    if (ci==3 && ck==2) {
-	      U(local_dof_indices[k])=press_update2[i]+press_update[k]; //value of phi and old pressure is added
-	    }		  
-	  }
-	  */	  
-	}
-	//empty values of phiupdate and pressure update for next cell use.
-	//phi_update=0; press_update=0;
 	
       }
       ++t_cell;
@@ -794,24 +720,7 @@ namespace phaseField1
 	Assert(file, ExcFileNotOpen(filename.c_str()));
 	grid_in.read_ucd(file);
       }  
-    
-      //boundary_ids = triangulation.get_boundary_ids(); 
-      
-
-      /*  
-    std::vector<unsigned int> numRepetitions;
-    numRepetitions.push_back(XSubRf); // x refinement
-    numRepetitions.push_back(YSubRf); // y refinement
-    // numRepetitions.push_back(ZSubRf); // Z refinement
- 
-    Point<2> p1 (0,0);
-    Point<2> p2 (problemWidth,problemHeight);
-   
-    GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
-    //GridGenerator::channel_with_cylinder(triangulation,0.03,2,2.0,true)
-    //GridGenerator::hyper_cube_with_cylindrical_hole(triangulation,.25,.5,5.0,1,true ); 	
-    */
-    
+       
     
     triangulation.refine_global (globalRefinementFactor); //global refinement
     setup_system(); //initial setup
@@ -819,33 +728,23 @@ namespace phaseField1
     
     //setup initial conditions
     VectorTools::interpolate(dof_handler, InitalConditions<dim>(), U); Un=U;
-    Unn=Un;
-    Unnn=Un;
-    Pr_U=U;
-    Pr_Un=Pr_U;
-    Pr_Unn=Pr_Un;
+    Unn=Un;Pr_U=U;Pr_Un=Pr_U;Pr_Unn=Pr_Un;
     //sync ghost vectors to non-ghost vectors
-    UGhost=U;
-    UnGhost=Un;
-    UnnGhost=Unn; 
-    UnnnGhost=Unnn;
+    UGhost=U; UnGhost=Un;UnnGhost=Unn; 
 
-    Pr_UGhost=Pr_U;
-    Pr_UnGhost=Pr_Un;
-    Pr_UnnGhost=Pr_Unn;
+    Pr_UGhost=Pr_U;Pr_UnGhost=Pr_Un;Pr_UnnGhost=Pr_Unn;
     output_results (0);
     
     //Time stepping
     currentIncrement=0;
-    for (currentTime=3*dt; currentTime<totalTime; currentTime+=dt){
+    for (currentTime=2*dt; currentTime<totalTime; currentTime+=dt){
       currentIncrement++;
       pcout << std::endl;
-      UnnnGhost=UnnGhost;
-      UnnGhost=UnGhost;
-      Pr_UnnGhost=Pr_UnGhost;     
+      UnnGhost=UnGhost; //saving k-1 data for u and p
+      Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%1==0) output_results(currentIncrement);      
+      if (NSTEP%200==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

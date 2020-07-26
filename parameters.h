@@ -11,7 +11,7 @@
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 5.0e-4
+#define TimeStep 5.0e-3
 #define TotalTime 5000*TimeStep
 
 //output controls
@@ -23,7 +23,7 @@
 #define ZSubRf 1
 
 //Kinematic viscosity
-#define nu 1.0
+#define nu 1.0/100.0
 
 
 

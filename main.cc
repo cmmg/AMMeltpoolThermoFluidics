@@ -55,21 +55,19 @@ namespace phaseField1
     ConstraintMatrix                          constraints, constraintsZero;
     LA::MPI::SparseMatrix                     system_matrix;
     LA::MPI::Vector                           locally_relevant_solution, U, Un, UGhost, UnGhost, dU;
-    LA::MPI::Vector                           Unn, UnnGhost; 
-
-
-    
+    LA::MPI::Vector                           Unn, UnnGhost;     
     LA::MPI::Vector                           system_rhs;
     ConditionalOStream                        pcout;
     TimerOutput                               computing_timer;
 
-    void update_pressure ();
+    void L2_projection();
+    void update_pressure (); 
     void applyBoundaryConditions_projection(const unsigned int increment);
     void setup_system_projection ();
     void assemble_system_projection();
     void solveIteration_Pr ();
     void solve_Pr ();
- 
+    void L2_solveIteration ();
     
     IndexSet                                  Pr_locally_owned_dofs;
     IndexSet                                  Pr_locally_relevant_dofs;
@@ -79,6 +77,11 @@ namespace phaseField1
     LA::MPI::Vector                           Pr_locally_relevant_solution,Pr_U, Pr_Un, Pr_UGhost, Pr_UnGhost, Pr_dU;
     LA::MPI::Vector                           Pr_system_rhs;
     LA::MPI::Vector                           Pr_UnnGhost, Pr_Unn;
+
+    ConstraintMatrix                          L2_constraints;
+    LA::MPI::SparseMatrix                     L2_Mass_matrix;
+    LA::MPI::Vector                           L2_locally_relevant_solution, L2_U,L2_UGhost;    
+    LA::MPI::Vector                           L2_system_rhs;
     
     //solution variables
     unsigned int currentIncrement, currentIteration;
@@ -160,8 +163,8 @@ namespace phaseField1
 
   template <int dim>
   void phaseField<dim>::applyBoundaryConditions_projection(const unsigned int increment){
-    Pr_constraints.clear (); 
-    Pr_constraints.reinit (Pr_locally_relevant_dofs);
+    Pr_constraints.clear (); L2_constraints.clear();
+    Pr_constraints.reinit (Pr_locally_relevant_dofs);  L2_constraints.reinit (Pr_locally_relevant_dofs); 
     //    DoFTools::make_hanging_node_constraints (dof_handler, constraints);
     Pr_constraintsZero.clear (); 
     Pr_constraintsZero.reinit (Pr_locally_relevant_dofs);
@@ -178,6 +181,7 @@ namespace phaseField1
        
     Pr_constraints.close ();
     Pr_constraintsZero.close ();
+    L2_constraints.close ();
   }
 
     
@@ -234,24 +238,37 @@ namespace phaseField1
     
     Pr_locally_relevant_solution.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
 
+    L2_locally_relevant_solution.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
+    
     //Non-ghost vectors
     Pr_system_rhs.reinit (Pr_locally_owned_dofs, mpi_communicator);
     Pr_U.reinit (Pr_locally_owned_dofs, mpi_communicator);
     Pr_Un.reinit (Pr_locally_owned_dofs, mpi_communicator);
     Pr_dU.reinit (Pr_locally_owned_dofs, mpi_communicator);
     Pr_Unn.reinit (Pr_locally_owned_dofs, mpi_communicator);
-   
+
+    L2_U.reinit (Pr_locally_owned_dofs, mpi_communicator);
+    L2_system_rhs.reinit (Pr_locally_owned_dofs, mpi_communicator);
+    
     //Ghost vectors
     Pr_UGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
     Pr_UnGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
     Pr_UnnGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
+
+    L2_UGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions_projection(0);
     
     DynamicSparsityPattern Pr_dsp (Pr_locally_relevant_dofs);
     DoFTools::make_sparsity_pattern (Pr_dof_handler, Pr_dsp, Pr_constraints, false);
     SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, Pr_locally_relevant_dofs);
-    Pr_system_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);       
+    Pr_system_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
+    L2_Mass_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
+
+    DynamicSparsityPattern L2_dsp (Pr_locally_relevant_dofs);
+    DoFTools::make_sparsity_pattern (Pr_dof_handler, L2_dsp, L2_constraints, false);
+    SparsityTools::distribute_sparsity_pattern (L2_dsp, Pr_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, Pr_locally_relevant_dofs);
+    L2_Mass_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, L2_dsp, mpi_communicator);    
   }
 
    
@@ -447,8 +464,7 @@ namespace phaseField1
 	}
 	locally_relevant_solution = completely_distributed_solution;
         dU = completely_distributed_solution; 	
-      
-                   
+                         
   }   
  
 
@@ -493,75 +509,49 @@ namespace phaseField1
 	    Pr_constraintsZero.distribute (completely_distributed_solution);
 	}
 	
-	locally_relevant_solution = completely_distributed_solution;
+	Pr_locally_relevant_solution = completely_distributed_solution;
 	Pr_dU=completely_distributed_solution;
       
               
   }   
  
-  
-  
-  /*    
- //Solve iteration
+
+  //Solve
   template <int dim>
-  void phaseField<dim>::solveIteration (const bool lever)
-  {
+ void phaseField<dim>::L2_solveIteration(){
+    //Iterative solvers from Petsc and Trilinos
     TimerOutput::Scope t(computing_timer, "solve");
-    PETScWrappers::MPI::Vector
-      completely_distributed_solution (locally_owned_dofs,mpi_communicator);
-
-    PETScWrappers::PreconditionSSOR preconditioner(Pr_system_matrix), Pr_preconditioner(system_matrix);
-     
-    if (lever) {
-    //distributed_incremental_displacement = incremental_displacement;
-    SolverControl           solver_control (dof_handler.n_dofs(),
-                                            1e-16*system_rhs.l2_norm());
-    PETScWrappers::SolverGMRES cg (solver_control,
-                                mpi_communicator);
-    // PETScWrappers::PreconditionBlockJacobi preconditioner(system_matrix);
-    //PETScWrappers::PreconditionILU preconditioner(Pr_system_matrix);
-    cg.solve (system_matrix,  completely_distributed_solution, system_rhs,
-              preconditioner);
-
-    if ((currentIteration==0)&&(currentIncrement==1)){
-      constraintsZero.distribute (completely_distributed_solution);
-    }
-    else{
-      constraints.distribute (completely_distributed_solution);
-    }    
-    locally_relevant_solution = completely_distributed_solution;
-    dU = completely_distributed_solution;
-    pcout << "   Solved in " << solver_control.last_step()
-	  << " iterations." << std::endl;
-    }
+    LA::MPI::Vector completely_distributed_solution (Pr_locally_owned_dofs, mpi_communicator);    	
+    SolverControl solver_control (Pr_dof_handler.n_dofs(), 1e-12);
+#ifdef USE_PETSC_LA
+    LA::SolverGMRES solver(solver_control, mpi_communicator);
+#else
+    LA::SolverGMRES solver(solver_control);
+#endif
+    LA::MPI::PreconditionAMG preconditioner;
+    LA::MPI::PreconditionAMG::AdditionalData data;
+#ifdef USE_PETSC_LA //dof_handler.get_fe().n_components()
+    //data.symmetric_operator = true;
+#else
+    // Trilinos defaults are good 
+#endif
+    //if lever is true run for diffusion part 
+    preconditioner.initialize(L2_Mass_matrix, data);
     
-    if (!lever) {
-          //distributed_incremental_displacement = incremental_displacement;
-    SolverControl           solver_control (dof_handler.n_dofs(),
-                                            1e-16*Pr_system_rhs.l2_norm());
-    PETScWrappers::SolverGMRES cg (solver_control,
-                                mpi_communicator);
-    //PETScWrappers::PreconditionBlockJacobi preconditioner(Pr_system_matrix);
-    //PETScWrappers::PreconditionILU preconditioner(Pr_system_matrix);
-    cg.solve (Pr_system_matrix,  completely_distributed_solution, Pr_system_rhs,
-              Pr_preconditioner);
-
-    if ((currentIteration==0)&&(currentIncrement==1)){
-      constraintsZero.distribute (completely_distributed_solution);
-    }
-    else{
-      constraints.distribute (completely_distributed_solution);
-    }    
-    locally_relevant_solution = completely_distributed_solution;
-    Pr_dU = completely_distributed_solution;
+    solver.solve (L2_Mass_matrix, completely_distributed_solution, L2_system_rhs, preconditioner);  
     pcout << "   Solved in " << solver_control.last_step()
-	  << " iterations." << std::endl;
+          << " iterations." << std::endl;         	       
+
+    L2_constraints.distribute (completely_distributed_solution);
+    L2_locally_relevant_solution = completely_distributed_solution;
+    L2_U=completely_distributed_solution;
+    if (isnan(L2_U.l2_norm())) std:: cout << "Nan in L2projection" << std::endl;
+    if (isinf(L2_U.l2_norm())) std:: cout << "inf in L2projection" << std::endl;
     
-    }
-     
+    L2_UGhost=L2_U;
+	
   }
-  */
-  
+    
 
   
   //Solve
@@ -588,6 +578,9 @@ namespace phaseField1
 
     pcout << std::endl;
     solve_Pr();// for projection solve : solve based on converged U and not Un
+    L2_projection();
+    pcout << std::endl;
+    pcout << "Updating pressure "<<std::endl;
     update_pressure(); //update values of U and UGhost
     Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;     
   }
@@ -624,48 +617,116 @@ namespace phaseField1
   
   //Adaptive grid refinement
   template <int dim>
+  void phaseField<dim>::L2_projection ()  {    
+    // TimerOutput::Scope t(computing_timer, "adaptiveRefinement");
+    L2_system_rhs=0.0; L2_Mass_matrix=0.0;
+    const QGauss<dim>  quadrature_formula(FEOrder+2);
+    FEValues<dim> fe_values (fe, quadrature_formula,
+                             update_values    |  update_gradients |
+                             update_quadrature_points |update_JxW_values);
+    unsigned int dofs_per_cell= fe_values.dofs_per_cell;
+    unsigned int n_q_points= fe_values.n_quadrature_points;    
+    FullMatrix<double>   local_matrix (dofs_per_cell, dofs_per_cell);
+    Vector<double>       local_rhs (dofs_per_cell);
+    std::vector<Vector<double> > quadSolutions,Pr_quadSolutions;
+    std::vector< std::vector< Tensor< 1, dim, double >>> quadGradU;  
+    for (unsigned int q=0; q<n_q_points; ++q){
+      Pr_quadSolutions.push_back(dealii::Vector<double>(DIMS)); //2 since there are two degree of freedom per cell
+      quadSolutions.push_back(dealii::Vector<double>(DIMS));
+      quadGradU.push_back(std::vector< Tensor< 1, dim, double >>(DIMS));
+    }
+        
+    typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(), endc = dof_handler.end();
+    typename parallel::distributed::Triangulation<dim>::active_cell_iterator t_cell = triangulation.begin_active();   
+    std::vector<unsigned int> local_dof_indices (dofs_per_cell);
+    std::vector<double> press_update(dofs_per_cell);
+    //get values of p,phi and nu time div v 
+    for (;cell!=endc; ++cell)      
+      if (cell->is_locally_owned() ) {
+	fe_values.reinit (cell);        
+        cell->get_dof_indices (local_dof_indices);
+
+	fe_values.get_function_values(UnnGhost, quadSolutions);
+	fe_values.get_function_values(Pr_UnGhost, Pr_quadSolutions);
+	fe_values.get_function_gradients(UGhost, quadGradU);	
+
+	//rotational pressure update
+	for (unsigned int q=0; q<n_q_points; ++q) {
+	     for (unsigned int i=0; i<dofs_per_cell ; ++i) {
+	       //RHS
+	       unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;
+	       if(ci==2) {
+		 local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadGradU[q][0][0])*fe_values.JxW(q);
+		 local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadGradU[q][1][1])*fe_values.JxW(q);
+		 //local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(Pr_quadSolutions[q][2])*fe_values.JxW(q);
+		 //local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadSolutions[q][2])*fe_values.JxW(q);
+	       }
+	       
+	       for (unsigned int j=0; j<dofs_per_cell ; ++j) {
+		 unsigned int cj = fe_values.get_fe().system_to_component_index(j).first - 0;
+		 if(ci==cj && ci==2) local_matrix[i][j]+=fe_values.shape_value_component(i, q,2)*fe_values.shape_value_component(j, q,2)*fe_values.JxW(q);	    
+	       }
+	     }
+	}
+	
+	L2_constraints.distribute_local_to_global (local_matrix, local_rhs, local_dof_indices, L2_Mass_matrix, L2_system_rhs);        	     	
+      }
+       
+    L2_Mass_matrix.compress (VectorOperation::add);
+    L2_system_rhs.compress (VectorOperation::add);
+    L2_solveIteration();
+  }
+
+
+
+    //Adaptive grid refinement
+  template <int dim>
   void phaseField<dim>::update_pressure ()  {    
     // TimerOutput::Scope t(computing_timer, "adaptiveRefinement");
     const QGauss<dim>  quadrature_formula(FEOrder+2);
     FEValues<dim> fe_values (fe, quadrature_formula,
                              update_values    |  update_gradients |
-                             update_quadrature_points);
+                             update_quadrature_points |update_JxW_values);
     unsigned int dofs_per_cell= fe_values.dofs_per_cell;
     unsigned int n_q_points= fe_values.n_quadrature_points;
-
-    std::vector<Vector<double> > quadSolDiffusion,quadSolProjection;
-    for (unsigned int q=0; q<n_q_points; ++q){
-      quadSolDiffusion.push_back(dealii::Vector<double>(DIMS)); //2 since there are two degree of freedom per cell
-      quadSolProjection.push_back(dealii::Vector<double>(DIMS)); //2 since there are two degree of freedom per cell
-    }
-   
+    
+       
     typename DoFHandler<dim>::active_cell_iterator cell = dof_handler.begin_active(), endc = dof_handler.end();
     typename parallel::distributed::Triangulation<dim>::active_cell_iterator t_cell = triangulation.begin_active();
    
     std::vector<unsigned int> local_dof_indices (dofs_per_cell);
     std::vector<double> press_update(dofs_per_cell);
+
+    //get values of p,phi and nu time div v 
     for (;cell!=endc; ++cell) {     
       if (cell->is_locally_owned() ) {
 	fe_values.reinit (cell);        
         cell->get_dof_indices (local_dof_indices);
 	
+	//pressure update
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  press_update[i]=0;
 	  const unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;	   
-	  //note value of old pressure  from UGhost	  
+	  //note value of pressue L2_ UGhost	  
 	  if (ci==2) {
 	    press_update[i]=Pr_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
 	    press_update[i]+=UnGhost(local_dof_indices[i]); //press_k is noted and added to phi_k+1
-	    U(local_dof_indices[i])=press_update[i];
+	    press_update[i]+=-(nu)*L2_UGhost(local_dof_indices[i]); //nu. div.v
+	    U(local_dof_indices[i])=press_update[i];	    
+
 	  }	  
 	}
-	
+	     	
       }
-      ++t_cell;
-      }     
+    }
+    
+    
     U.compress(VectorOperation::insert);	
   }
 
+
+  
+  
   
   //Output
   template <int dim>
@@ -744,7 +805,7 @@ namespace phaseField1
       Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%200==0) output_results(currentIncrement);      
+      if (NSTEP%50==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

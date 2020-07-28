@@ -25,7 +25,7 @@ namespace phaseField1
         Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     	
 	values(0)=0.0;  //ux
 	values(1)=0.0; //uy
-	values(2)=25.0-p[0]; //pressure
+	values(2)=0.0; //pressure
     }
     
   };
@@ -131,32 +131,30 @@ namespace phaseField1
     DoFTools::make_hanging_node_constraints (dof_handler, constraintsZero);
     
     //Setup boundary conditions
-    std::vector<bool> uBCI (DIMS, false); uBCI[0]=true;uBCI[1]=true; 
-    std::vector<bool> uBCW (DIMS, false); uBCW[0]=true;uBCW[1]=true; 
-    std::vector<bool> uBCO (DIMS, false);              uBCO[1]=true; 
+    std::vector<bool> uBC (DIMS, true); uBC[2]=false;   
     
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
-    //top wall and bottom wall
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraints,uBCW);
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraintsZero,uBCW);
+    //left
+    VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraintsZero,uBC);
 
-    //cavity walls
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraints,uBCW);
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uBCW);
+    //right
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
 
-    //outlet
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBCO);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBCO);
+    //bottom
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
     
-    //inlet
+    //top
     std::vector<double> inletValue (DIMS);
     inletValue[0]=1.0;
     inletValue[1]=0.0;
     inletValue[2]=0.0;
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(inletValue), constraints,uBCI);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCI);
-    
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ConstantFunction<dim>(inletValue), constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
+
     constraints.close ();
     constraintsZero.close ();
   }
@@ -172,13 +170,37 @@ namespace phaseField1
     
     //Setup boundary conditions
     std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
-  
+
+    //FEValuesExtractors::Vector velocities(0);
+    FEValuesExtractors::Scalar pressure(dim);
+    
+    //typename DoFHandler<dim>::active_cell_iterator
+      //cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
+    
+    //std::vector<bool> boundary_dofs(Pr_dof_handler.n_dofs(), false);
+
+    //constraints first dof of pressure to zero
+    //DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
+    //boundary_dofs);
+    
+    //const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
+    //							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
+    
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
 
-    //outlet
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-       
+
+    //Pr_constraints.add_line(first_boundary_dof);
     Pr_constraints.close ();
     Pr_constraintsZero.close ();
     L2_constraints.close ();
@@ -773,15 +795,9 @@ namespace phaseField1
   template <int dim>
   void phaseField<dim>::run (){   
     GridIn<dim> grid_in;
-    
-    grid_in.attach_triangulation(triangulation);
-      {
-	std::string   filename = "nsbench2.inp";
-	std::ifstream file(filename);
-	Assert(file, ExcFileNotOpen(filename.c_str()));
-	grid_in.read_ucd(file);
-      }  
-       
+      
+     //setup problem geometry and mesh
+    GridGenerator::hyper_cube (triangulation, -problemWidth/2.0, problemWidth/2.0, true);
     
     triangulation.refine_global (globalRefinementFactor); //global refinement
     setup_system(); //initial setup

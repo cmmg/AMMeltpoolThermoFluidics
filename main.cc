@@ -382,12 +382,8 @@ namespace phaseField1
 	  else{Pr_ULocal[i]=Pr_UGhost(local_dof_indices[i]);}
 	  Pr_ULocal[i].diff (i, dofs_per_cell);
 	  Pr_ULocalConv[i]= Pr_UnGhost(local_dof_indices[i]);
-
 	  //here UGhost has converged values from diffusion step
-	  if (std::abs(UGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
-	  else{ULocal[i]=UGhost(local_dof_indices[i]);}
-	  //note needed //ULocal[i].diff (i, dofs_per_cell);
-	  ULocalConv[i]= UnGhost(local_dof_indices[i]); //may not be used
+	  ULocal[i]=UGhost(local_dof_indices[i]);
 	}
 
 
@@ -562,8 +558,9 @@ namespace phaseField1
       currentIteration=0;
       char buffer[200];         
       pcout << "Solving for diffusion "<<std::endl;
+      
     while (true){
-      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=5){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system();       
       current_norm=system_rhs.l2_norm();     
@@ -579,9 +576,8 @@ namespace phaseField1
     pcout << std::endl;
     solve_Pr();// for projection solve : solve based on converged U and not Un
     L2_projection();
-    pcout << std::endl;
-    pcout << "Updating pressure "<<std::endl;
     update_pressure(); //update values of U and UGhost
+    Unn=Un; UnnGhost=Unn; 
     Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;     
   }
 
@@ -596,7 +592,7 @@ namespace phaseField1
       char buffer[200];          
       pcout << "Solving for projection "<<std::endl;	    
       while (true){
-      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=5){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system_projection();       
       current_norm=Pr_system_rhs.l2_norm();
@@ -610,6 +606,7 @@ namespace phaseField1
       ++currentIteration;
     }
       //Pr_U.operator*=(1.5/dt);
+      Pr_Unn=Pr_Un; Pr_UnnGhost=Pr_Unn;
       Pr_Un=Pr_U; Pr_UnGhost=Pr_Un;
      //update values   
   }
@@ -801,11 +798,11 @@ namespace phaseField1
     for (currentTime=2*dt; currentTime<totalTime; currentTime+=dt){
       currentIncrement++;
       pcout << std::endl;
-      UnnGhost=UnGhost; //saving k-1 data for u and p
-      Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
+      // UnnGhost=UnGhost; //saving k-1 data for u and p
+      //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%50==0) output_results(currentIncrement);      
+      if (NSTEP%200==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

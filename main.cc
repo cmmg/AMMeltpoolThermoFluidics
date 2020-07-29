@@ -25,7 +25,8 @@ namespace phaseField1
         Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     	
 	values(0)=0.0;  //ux
 	values(1)=0.0; //uy
-	values(2)=25.0-p[0]; //pressure
+	//values(2)=1.0e+05*(problemWidth-p[0])/problemWidth; //pressure
+	values(2)=problemWidth-p[0]; //pressure
     }
     
   };
@@ -133,29 +134,30 @@ namespace phaseField1
     //Setup boundary conditions
     std::vector<bool> uBCI (DIMS, false); uBCI[0]=true;uBCI[1]=true; 
     std::vector<bool> uBCW (DIMS, false); uBCW[0]=true;uBCW[1]=true; 
-    std::vector<bool> uBCO (DIMS, false);              uBCO[1]=true; 
+    std::vector<bool> uBCO (DIMS, false); uBCO[1]=true;  
     
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //top wall and bottom wall
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraints,uBCW);
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraintsZero,uBCW);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS), constraints,uBCW);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS), constraintsZero,uBCW);
 
-    //cavity walls
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraints,uBCW);
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uBCW);
+    //bottom
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraints,uBCW);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCW);
 
     //outlet
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBCO);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBCO);
-    
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uBCO);
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBCO);
+
     //inlet
     std::vector<double> inletValue (DIMS);
-    inletValue[0]=1.0;
+    inletValue[0]=0.001;
     inletValue[1]=0.0;
-    inletValue[2]=0.0;
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(inletValue), constraints,uBCI);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCI);
+    inletValue[2]=0.0;  
+    VectorTools::interpolate_boundary_values (dof_handler, 0, ConstantFunction<dim>(inletValue), constraints,uBCI);
+    VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS) , constraintsZero,uBCI);
+
     
     constraints.close ();
     constraintsZero.close ();
@@ -173,11 +175,18 @@ namespace phaseField1
     //Setup boundary conditions
     std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
   
-    // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
-
+    
+    //inlet
+    std::vector<double> inletValue (DIMS);
+    inletValue[0]=0.0;
+    inletValue[1]=0.0;
+    inletValue[2]=25.0;  
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ConstantFunction<dim>(inletValue) , Pr_constraints,uBC);
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+   
     //outlet
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
        
     Pr_constraints.close ();
     Pr_constraintsZero.close ();
@@ -563,7 +572,7 @@ namespace phaseField1
       char buffer[200];         
       pcout << "Solving for diffusion "<<std::endl;
     while (true){
-      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=5){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system();       
       current_norm=system_rhs.l2_norm();     
@@ -596,7 +605,7 @@ namespace phaseField1
       char buffer[200];          
       pcout << "Solving for projection "<<std::endl;	    
       while (true){
-      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=5){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system_projection();       
       current_norm=Pr_system_rhs.l2_norm();
@@ -772,17 +781,14 @@ namespace phaseField1
     //Solve problem
   template <int dim>
   void phaseField<dim>::run (){   
-    GridIn<dim> grid_in;
-    
-    grid_in.attach_triangulation(triangulation);
-      {
-	std::string   filename = "nsbench2.inp";
-	std::ifstream file(filename);
-	Assert(file, ExcFileNotOpen(filename.c_str()));
-	grid_in.read_ucd(file);
-      }  
-       
-    
+    std::vector<unsigned int> numRepetitions;
+    numRepetitions.push_back(XSubRf); // x refinement
+    numRepetitions.push_back(YSubRf); // y refinement
+    Point<2> p1 (0,0);
+    Point<2> p2 (problemWidth,problemHeight);
+    GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
+   
+
     triangulation.refine_global (globalRefinementFactor); //global refinement
     setup_system(); //initial setup
     setup_system_projection();
@@ -805,7 +811,7 @@ namespace phaseField1
       Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%50==0) output_results(currentIncrement);      
+      if (NSTEP%200==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

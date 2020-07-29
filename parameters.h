@@ -3,22 +3,22 @@
 #define FEOrder 2
 
 #define problemWidth 25.0  //[2]
-#define problemHeight 4.1   //[1]
+#define problemHeight 5.0   //[1]
 #define problem_Length 0.01 //[0]
 
-#define globalRefinementFactor 3
+#define globalRefinementFactor 5
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 5.0e-3
-#define TotalTime 2000*TimeStep
+#define TimeStep 1.0e-2
+#define TotalTime 10000*TimeStep
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 1
+#define XSubRf 5
 #define YSubRf 1
 #define ZSubRf 1
 

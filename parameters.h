@@ -6,13 +6,13 @@
 #define problemHeight 1.0   //[1]
 #define problem_Length 0.01 //[0]
 
-#define globalRefinementFactor 6
+#define globalRefinementFactor 5
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 5.0e-4
-#define TotalTime 2000*TimeStep
+#define TimeStep 1.0e-3
+#define TotalTime 20000*TimeStep
 
 //output controls
 #define outputFileName "solution"
@@ -23,7 +23,7 @@
 #define ZSubRf 1
 
 //Kinematic viscosity
-#define nu 0.01
+#define nu 1.0/100.0
 
 
 

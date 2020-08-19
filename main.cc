@@ -11,6 +11,7 @@
 //physics headers
 #include "include/chemo.h"
 #include "include/projection.h"
+//#include "include/therm.h"
 //Namespace
 namespace phaseField1
 {
@@ -26,6 +27,8 @@ namespace phaseField1
 	values(0)=0.0;  //ux
 	values(1)=0.0; //uy
 	values(2)=25.0-p[0]; //pressure
+	//values(3)=353.0;
+	//values(4)=0.0;
     }
     
   };
@@ -130,33 +133,32 @@ namespace phaseField1
     constraintsZero.reinit (locally_relevant_dofs);
     DoFTools::make_hanging_node_constraints (dof_handler, constraintsZero);
     
+   
     //Setup boundary conditions
-    std::vector<bool> uBCI (DIMS, false); uBCI[0]=true;uBCI[1]=true; 
-    std::vector<bool> uBCW (DIMS, false); uBCW[0]=true;uBCW[1]=true; 
-    std::vector<bool> uBCO (DIMS, false);              uBCO[1]=true; 
+    std::vector<bool> uBC (DIMS, false);    
     
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
-    //top wall and bottom wall
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraints,uBCW);
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS), constraintsZero,uBCW);
+    //left
+    VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraintsZero,uBC);
 
-    //cavity walls
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraints,uBCW);
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uBCW);
+    //right
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
 
-    //outlet
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBCO);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBCO);
+    //bottom
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
     
-    //inlet
-    std::vector<double> inletValue (DIMS);
-    inletValue[0]=1.0;
-    inletValue[1]=0.0;
-    inletValue[2]=0.0;
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(inletValue), constraints,uBCI);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCI);
-    
+    //top
+    //std::vector<double> inletValue (DIMS);
+    //inletValue[0]=1.0;
+    //inletValue[1]=0.0;
+    //inletValue[2]=0.0;
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS), constraints,uBC);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
+ 
     constraints.close ();
     constraintsZero.close ();
   }
@@ -175,13 +177,15 @@ namespace phaseField1
     FEValuesExtractors::Scalar pressure(dim);
     typename DoFHandler<dim>::active_cell_iterator
     cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
-    
+
+    std::vector<bool> boundary_dofs(Pr_dof_handler.n_dofs(), false);
+
     //constraints first dof of pressure to zero
     DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
-    boundary_dofs);
+     boundary_dofs);
 
-    const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
-							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
+     const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
+    							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
 
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls       
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
@@ -340,8 +344,8 @@ namespace phaseField1
 		 
 	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
 
-	residualForTherm(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime) ;
-
+	//residualForTherm(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime) ;
+	
 
 
 	

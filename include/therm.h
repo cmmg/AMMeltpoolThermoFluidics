@@ -127,8 +127,8 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
     double CHECKW=cell->face(f)->center()[2];      
-    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
-    //  if(cell->face(f)->center()[1] == problem_Height /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {      
+    //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
+      if(cell->face(f)->center()[1] == problemHeight /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {      
       //evaluate Residual on face
       for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;

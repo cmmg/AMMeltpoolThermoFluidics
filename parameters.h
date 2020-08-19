@@ -33,7 +33,7 @@
 #define dGammadT -0.4e-03
 
 //expansion coeff
-#define beta 5.85e-05
+#define BETA 5.85e-05
 
 //PDAS in micron
 #define PDAS 0.5 
@@ -56,6 +56,9 @@
 
 //Density of Material
 #define RHO 4420.0
+
+//kinematic viscosity
+#define nu mu/RHO
 
 //Ambient Temperature
 #define Tamb 300.0

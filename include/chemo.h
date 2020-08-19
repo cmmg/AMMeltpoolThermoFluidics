@@ -18,7 +18,9 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   
   unsigned int n_q_points_face= fe_face_values.n_quadrature_points;
   const unsigned int faces_per_cell = GeometryInfo<dim>::faces_per_cell;
-
+  
+  dealii::Table<1,Sacado::Fad::DFad<double> > T(n_q_points,dim), liquid(n_q_points,dim);
+  dealii::Table<2,Sacado::Fad::DFad<double> > Tface_j(n_q_points,dim);
   dealii::Table<2,Sacado::Fad::DFad<double> > vel(n_q_points,dim);
   dealii::Table<3,Sacado::Fad::DFad<double> > vel_j(n_q_points,dim,dim);
   dealii::Table<1,double> press_conv(n_q_points),phi_conv(n_q_points),phi_conv_conv(n_q_points);      
@@ -28,7 +30,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //Interpolate on all cells 
   for (unsigned int q=0; q<n_q_points; ++q) {  
     press_conv[q]=0; phi_conv[q]=0; phi_conv_conv[q]=0;
-
+    T[q]=0; liquid[q]=0; 
     //initialization : filling it with zero and later updated
     for (unsigned int j=0; j<dim; j++) {
       vel[q][j]=0; vel_conv[q][j]=0; vel_conv_conv[q][j]=0; vel_star[q][j]=0;
@@ -57,7 +59,15 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	phi_conv[q]+=fe_values.shape_value_component(i, q, ck)*Pr_ULocalConv[i];
 	phi_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*Pr_ULocalConvConv[i];	
       }
-           
+      
+      else if (ck==3) {
+	T[q]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
+     }
+    
+      else if (ck==4) {
+	liquid[q]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
+      }
+                
     }
 
      for (unsigned int j=0; j<dim; j++) {
@@ -68,6 +78,31 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     }
           
   }
+
+  // interpolate over face
+  for (unsigned int f=0; f < faces_per_cell; f++) { 
+    fe_face_values.reinit (cell, f);
+    double CHECKL=cell->face(f)->center()[0];
+    double CHECKH=cell->face(f)->center()[1];
+    // double CHECKW=cell->face(f)->center()[2];      
+    //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
+    if(cell->face(f)->center()[1] == problemHeight) {      
+      for (unsigned int q=0; q<n_q_points_face; ++q) {
+	for (unsigned int j=0; j<dim; j++) {   Tface_j[q][j]+=0; }
+	for (unsigned int i=0; i<dofs_per_cell; ++i) {
+	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
+	  if (ck==3) {
+	    for (unsigned int j=0; j<dim; j++) {   Tface_j[q][j]+=fe_face_values.shape_grad(i, q)*ULocal[i]; } 
+	  }
+	}
+        
+      }
+
+
+    }
+    
+  }
+
  
   //evaluate Residual on cell
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
@@ -76,7 +111,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
       if(ck>=0 && ck < 2) {
 	//Massterm
        R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
-
+       
        //Laplace term and pressure
 	for (unsigned int j = 0; j < dim; j++){
 	  R[i]+=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);		 	  
@@ -84,8 +119,16 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
 	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
 	R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
+	R[i]*=(1.0/RHO);
+	//gravity and free convection
+	if (ck==1) {
+	  R[i]+=-fe_values.shape_value_component(i, q, ck)*(gravity)*fe_values.JxW(q);
+	  R[i]+=-fe_values.shape_value_component(i, q, ck)*(gravity*beta*(T[q]-TSS))*fe_values.JxW(q);
+	}
 	
-	
+	//pressure loss due to mushy zone 
+	R[i]+=(180*mu/RHO/PDAS/PDAS)*fe_values.shape_value_component(i, q, ck)*fe_values.JxW(q);
+	R[i]*=((1.0-liquid[q]*liquid[q])*vel[q][ck]/(liquid[q]*liquid[q]*liquid[q])+0.001)
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
@@ -105,6 +148,28 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 
 
 
+
+  //surface integral
+  for (unsigned int f=0; f < faces_per_cell; f++) { 
+    fe_face_values.reinit (cell, f);
+    double CHECKL=cell->face(f)->center()[0];
+    double CHECKH=cell->face(f)->center()[1];
+    //    double CHECKW=cell->face(f)->center()[2];      
+    //if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
+      if(cell->face(f)->center()[1] == problem_Height /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {      
+      //evaluate Residual on face
+      for (unsigned int i=0; i<dofs_per_cell; ++i) {
+	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;	
+	for (unsigned int q=0; q<n_q_points_face; ++q) {
+	  if (ck>=0 && ck < 2) {  
+	  R[i] += (dGammadT)*fe_face_values.shape_value(i, q)*(Tface[q][ck])*fe_face_values.JxW(q);
+	  }
+	}
+      }
+
+    }
+
+  }
   
 }
 

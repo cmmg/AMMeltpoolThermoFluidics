@@ -172,13 +172,32 @@ namespace phaseField1
     
     //Setup boundary conditions
     std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
-  
-    // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
+    FEValuesExtractors::Scalar pressure(dim);
+    typename DoFHandler<dim>::active_cell_iterator
+    cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
+    
+    //constraints first dof of pressure to zero
+    DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
+    boundary_dofs);
 
-    //outlet
+    const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
+							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
+
+    // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls       
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-       
+
+   
+    Pr_constraints.add_line(first_boundary_dof);
     Pr_constraints.close ();
     Pr_constraintsZero.close ();
     L2_constraints.close ();
@@ -321,6 +340,10 @@ namespace phaseField1
 		 
 	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
 
+	residualForTherm(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime) ;
+
+
+
 	
 	//evaluate Residual(R) and Jacobian(R')
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
@@ -422,7 +445,7 @@ namespace phaseField1
   template <int dim>
   void phaseField<dim>::solveIteration(){
 
-      TimerOutput::Scope t(computing_timer, "solve");
+    TimerOutput::Scope t(computing_timer, "solve");
     LA::MPI::Vector completely_distributed_solution (locally_owned_dofs, mpi_communicator);          
       //Iterative solvers from Petsc and Trilinos
     SolverControl solver_control (dof_handler.n_dofs(), 1e-12);
@@ -500,11 +523,11 @@ namespace phaseField1
 
     if ((currentIteration==0)&&(currentIncrement==1)){
 	  Pr_constraints.distribute (completely_distributed_solution);
-	}
+    }
 	else{
-	    Pr_constraintsZero.distribute (completely_distributed_solution);
+	  Pr_constraintsZero.distribute (completely_distributed_solution);
 	}
-	
+    
 	Pr_locally_relevant_solution = completely_distributed_solution;
 	Pr_dU=completely_distributed_solution;
       
@@ -769,17 +792,26 @@ namespace phaseField1
     //Solve problem
   template <int dim>
   void phaseField<dim>::run (){   
-    GridIn<dim> grid_in;
     
+    
+    /*GridIn<dim> grid_in; 
     grid_in.attach_triangulation(triangulation);
       {
 	std::string   filename = "nsbench2.inp";
 	std::ifstream file(filename);
 	Assert(file, ExcFileNotOpen(filename.c_str()));
 	grid_in.read_ucd(file);
-      }  
-       
-    
+	}*/  
+      
+    std::vector<unsigned int> numRepetitions;
+    numRepetitions.push_back(XSubRf); // x refinement
+    numRepetitions.push_back(YSubRf); // y refinement
+    Point<2> p1 (0,0);
+    Point<2> p2 (problemLength,problemHeight);
+    GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
+   
+
+
     triangulation.refine_global (globalRefinementFactor); //global refinement
     setup_system(); //initial setup
     setup_system_projection();

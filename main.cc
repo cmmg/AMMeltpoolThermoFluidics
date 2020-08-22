@@ -11,7 +11,7 @@
 //physics headers
 #include "include/chemo.h"
 #include "include/projection.h"
-//#include "include/therm.h"
+#include "include/therm.h"
 //Namespace
 namespace phaseField1
 {
@@ -26,9 +26,9 @@ namespace phaseField1
         Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     	
 	values(0)=0.0;  //ux
 	values(1)=0.0; //uy
-	values(2)=25.0-p[0]; //pressure
-	//values(3)=353.0;
-	//values(4)=0.0;
+	values(2)=0.0; //pressure
+	values(3)=353.0;
+	values(4)=0.0;
     }
     
   };
@@ -99,7 +99,7 @@ namespace phaseField1
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-    fe(FE_Q<dim>(2),2,FE_Q<dim>(1),1),
+    fe(FE_Q<dim>(2),2,FE_Q<dim>(1),1,FE_Q<dim>(1),2),
     dof_handler(triangulation),
     Pr_dof_handler(triangulation),
     pcout (std::cout, (Utilities::MPI::this_mpi_process(mpi_communicator)== 0)),
@@ -115,6 +115,9 @@ namespace phaseField1
     }
    
    nodal_solution_names.push_back("pressure"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+   nodal_solution_names.push_back("Temp"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+   nodal_solution_names.push_back("LiqFrac"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+
   }
   
   template <int dim>
@@ -135,8 +138,8 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uBC (DIMS, false);    
-    
+    std::vector<bool> uBC (DIMS, false); uBC[0]=true; uBC[1]=true;   
+    std::vector<bool> uBCB (DIMS, false); uBC[0]=true; uBC[1]=true;  uBCB[3]=true;    
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //left
@@ -147,17 +150,20 @@ namespace phaseField1
     VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uBC);
     VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
 
-    //bottom
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraints,uBC);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
-    
     //top
-    //std::vector<double> inletValue (DIMS);
-    //inletValue[0]=1.0;
-    //inletValue[1]=0.0;
-    //inletValue[2]=0.0;
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS), constraints,uBC);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
+    // VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    //VectorTools::interpolate_boundary_values (dof_handler, 3, ConstantFunction<dim>(0.01,DIMS) , constraints,uBCT);
+    // VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
+    
+    //bottom
+    std::vector<double> bottom (DIMS);
+    bottom[0]=0.0;
+    bottom[1]=0.0;
+    bottom[2]=0.0;
+    bottom[3]=353.0;
+    bottom[4]=0.0;
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(bottom), constraints,uBCB);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCB);
  
     constraints.close ();
     constraintsZero.close ();
@@ -178,13 +184,14 @@ namespace phaseField1
     typename DoFHandler<dim>::active_cell_iterator
     cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
 
-    std::vector<bool> boundary_dofs(Pr_dof_handler.n_dofs(), false);
-
+    //std::vector<bool> boundary_dofs(Pr_dof_handler.n_dofs(), false);
+    IndexSet boundary_dofs;
+    
     //constraints first dof of pressure to zero
     DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
-     boundary_dofs);
+    boundary_dofs);
 
-     const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
+    const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
     							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
 
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls       
@@ -199,7 +206,7 @@ namespace phaseField1
 
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
     VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-
+    
    
     Pr_constraints.add_line(first_boundary_dof);
     Pr_constraints.close ();
@@ -306,7 +313,15 @@ namespace phaseField1
                              update_values    |  update_gradients |
                              update_quadrature_points |
                              update_JxW_values);
-    FEFaceValues<dim> fe_face_values (fe, face_quadrature_formula, update_values | update_quadrature_points | update_JxW_values | update_normal_vectors);
+    //    FEFaceValues<dim> fe_face_values (fe, face_quadrature_formula, update_values | update_gradients | update_quadrature_points | update_JxW_values | update_normal_vectors);
+
+    FEFaceValues<dim> fe_face_values (fe, face_quadrature_formula,
+				      update_values    |  update_gradients |
+				      update_quadrature_points |
+				      update_JxW_values  |
+				      update_normal_vectors);
+
+    
     const unsigned int   dofs_per_cell = fe.dofs_per_cell;
     FullMatrix<double>   local_matrix (dofs_per_cell, dofs_per_cell);
     Vector<double>       local_rhs (dofs_per_cell);
@@ -341,13 +356,10 @@ namespace phaseField1
 	//setup residual vector
 	Table<1, Sacado::Fad::DFad<double> > R(dofs_per_cell); 
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {R[i]=0.0;}
-		 
-	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
-
-	//residualForTherm(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime) ;
 	
-
-
+	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
+	
+	residualForTherm(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime) ;
 	
 	//evaluate Residual(R) and Jacobian(R')
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
@@ -587,7 +599,7 @@ namespace phaseField1
       pcout << "Solving for diffusion "<<std::endl;
       
     while (true){
-      if (currentIteration>=5){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system();       
       current_norm=system_rhs.l2_norm();     
@@ -601,9 +613,9 @@ namespace phaseField1
     }
 
     pcout << std::endl;
-    solve_Pr();// for projection solve : solve based on converged U and not Un
-    L2_projection();
-    update_pressure(); //update values of U and UGhost
+    //solve_Pr();// for projection solve : solve based on converged U and not Un
+    //L2_projection();
+    //update_pressure(); //update values of U and UGhost
     Unn=Un; UnnGhost=Unn; 
     Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;     
   }
@@ -619,7 +631,7 @@ namespace phaseField1
       char buffer[200];          
       pcout << "Solving for projection "<<std::endl;	    
       while (true){
-      if (currentIteration>=5){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system_projection();       
       current_norm=Pr_system_rhs.l2_norm();
@@ -735,7 +747,7 @@ namespace phaseField1
 	  if (ci==2) {
 	    press_update[i]=Pr_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
 	    press_update[i]+=UnGhost(local_dof_indices[i]); //press_k is noted and added to phi_k+1
-	    press_update[i]+=-(nu)*L2_UGhost(local_dof_indices[i]); //nu. div.v
+	    //    press_update[i]+=-(nu)*L2_UGhost(local_dof_indices[i]); //nu. div.v
 	    U(local_dof_indices[i])=press_update[i];	    
 
 	  }	  
@@ -838,7 +850,7 @@ namespace phaseField1
       //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%200==0) output_results(currentIncrement);      
+      if (NSTEP%1==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

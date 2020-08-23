@@ -29,7 +29,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   dealii::Table<1,double> press_conv(n_q_points),phi_conv(n_q_points),phi_conv_conv(n_q_points);      
   dealii::Table<2,double> vel_conv(n_q_points,dim),vel_conv_conv(n_q_points,dim),vel_star(n_q_points,dim);
   dealii::Table<3,double> vel_conv_j(n_q_points,dim,dim),vel_conv_conv_j(n_q_points,dim,dim),vel_star_j(n_q_points,dim,dim);
-  
+
+  Sacado::Fad::DFad<double>  RHO_T;
   //Interpolate on all cells 
   for (unsigned int q=0; q<n_q_points; ++q) {  
     press_conv[q]=0; phi_conv[q]=0; phi_conv_conv[q]=0;
@@ -113,42 +114,48 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;         
     for (unsigned int q=0; q<n_q_points; ++q) {        
-      if(ck>=0 && ck < 2) {
+      if(ck>=0 && ck<2) {
 	//Massterm
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
        
 	//viscous term
 	for (unsigned int j = 0; j < dim; j++){
-	  if (liquid_conv[q]>0.1) {
-	    R[i]+= (mu)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
+	  if (liquid_conv[q]>=1.0) {
+	    RHO_T=RHOL;
+	    R[i]+= (mu/RHO_T)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
 	  }
-	  else {
-	    R[i]+= (mus)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
+	  else  {
+	    //  RHO_T=RHO;
+	    //R[i]+= (mu/RHO_T)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
 	  }
 	}
 	  
 	 //Laplace term and pressure
+	//RHO_T=RHOL;
 	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
 	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
 	R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
-	R[i]*=(1.0/RHO);
+	if(liquid_conv[q]>=1.0) {RHO_T=RHOL;}
+	if(liquid_conv[q]<1.0) {RHO_T=RHO;}
+	R[i]*=(1.0/RHO_T);
+	  
 	
 	//gravity and free convection
-	if (ck==1 &&liquid_conv[q]>0.1) {	  
-	  R[i]+=-fe_values.shape_value_component(i, q, ck)*(-gravity)*fe_values.JxW(q);
-	  R[i]+=-fe_values.shape_value_component(i, q, ck)*(-gravity*BETA*(T[q]-TSS))*fe_values.JxW(q);
+	if (ck==1 &&liquid_conv[q]>=1.0) {	  
+	   R[i]+=-fe_values.shape_value_component(i, q, ck)*(-gravity)*fe_values.JxW(q);
+	   R[i]+=-fe_values.shape_value_component(i, q, ck)*(-gravity*BETA*(T[q]-300.0))*fe_values.JxW(q);
 	}
 
-	if(liquid_conv[q]<0.99 && liquid_conv[q]>0.1) {
-	  R[i]+=(180*mu/RHO/PDAS/PDAS)*fe_values.shape_value_component(i, q, ck)*fe_values.JxW(q);
-	  R[i]*=((1.0-liquid_conv[q])*(1.0-liquid_conv[q])*vel[q][ck]/(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+0.0001);	  
+	//pressure drop due to mush zone
+	if (liquid_conv[q]<=1.0) {
+	  R[i]+=(0.24)*fe_values.shape_value_component(i, q, ck)*fe_values.JxW(q);
+	  R[i]*=((1.0-liquid[q])*(1.0-liquid[q])*vel[q][ck])/(liquid[q]*liquid[q]*liquid[q]+0.001);	  	  
 	}
-	else if(liquid_conv[q] < 0.1) {
-	  // R[i]+=fe_values.shape_value_component(i, q, ck)*fe_values.JxW(q);
-	  //R[i]*=(1.0)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q])*vel[q][ck]/(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+0.0001);	
+	else if (liquid_conv[q] < 0) {
+	  R[i]+=(0.24)*fe_values.shape_value_component(i, q, ck)*fe_values.JxW(q);
+	  R[i]*=((1.0)*(1.0)*vel[q][ck])/(0.00001);
 	}
-
-	  
+	
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
@@ -176,8 +183,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
-	  if (ck==0 && LiqfaceConv[q]>0.9) {  
-	    R[i] +=fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tface_j[q][ck])*fe_face_values.JxW(q);	    
+	  if (ck>=0 && ck< 2 && liquid_conv[q]>=1.0) {  
+	    R[i] +=-fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tface_j[q][ck])*fe_face_values.JxW(q);	    
 	  }
 	}
       }

@@ -35,7 +35,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	 vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
       }
            
-      if (ck==3) { 
+       else if (ck==3) { 
 	c[q]+=fe_values.shape_value_component(i, q, ck)*ULocal[i]; c_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 	for (unsigned int j=0; j<dim; j++) {
 	  c_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
@@ -74,21 +74,24 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //evaluate Residual on cell
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-    Sacado::Fad::DFad<double>  KK_T,CC_T;      
+    Sacado::Fad::DFad<double>  KK_T,CC_T,RHO_T;      
     for (unsigned int q=0; q<n_q_points; ++q) {     
       if (ck==3) {		
 	R[i] += (1.0/dt)*fe_values.shape_value_component(i, q, ck)*(c[q]-c_conv[q])*fe_values.JxW(q);  
 	if (c_conv[q]<=TLL && c_conv[q]>=0.0)	  {
 	    //SS316
-	    KK_T=11.82+(1.06*pow(10.0,-2))*c_conv[q];
-	    CC_T=330.9+0.563*c_conv[q]-(4.015*pow(10.0,-4))*c_conv[q]*c_conv[q]+ (9.465*pow(10.0,-8))*c_conv[q]*c_conv[q]*c_conv[q];
+	    //KK_T=11.82+(1.06*pow(10.0,-2))*c_conv[q];
+	    //CC_T=330.9+0.563*c_conv[q]-(4.015*pow(10.0,-4))*c_conv[q]*c_conv[q]+ (9.465*pow(10.0,-8))*c_conv[q]*c_conv[q]*c_conv[q];
+	  KK_T=KK; CC_T=CC;RHO_T=RHO;
+	  
 	}
-	else if (c_conv[q]>=TLL) {KK_T=KK ; CC_T=CC;}
+	else if (c_conv[q]>=TLL) {KK_T=KKL ; CC_T=CCL; RHO_T=RHOL;}
 	//sink term latent
 	R[i] +=(LATENT/CC_T)*(1.0/dt)*fe_values.shape_value_component(i, q, ck)*(liquid[q]-liquid_conv[q])*fe_values.JxW(q);
 	
 	for (unsigned int j = 0; j < dim; j++){
-	  R[i] +=(LATENT/CC_T)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
+	  //this is zero when there is isothermal melting
+	  //R[i] +=(LATENT/CC_T)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
 	}
 
 	//Sink term laser
@@ -97,9 +100,9 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	LASER*=std::exp(-(BB/spotRadius/spotRadius)*((qPoint[0]-VV*currentTime)*(qPoint[0]-VV*currentTime)))  ;
 	//LASER*=std::exp(-(BB/spotRadius/spotRadius)*((2.0*qPoint[2]-problem_Width)*(2.0*qPoint[2]-problem_Width) ))  ;
 	LASER*=std::exp(-(BB/LAYER/LAYER)*((qPoint[1]-problemHeight)*(qPoint[1]-problemHeight) ))  ;	
-	R[i] +=-(1.0/RHO/CC_T)*fe_values.shape_value_component(i, q, ck)*(LASER)*fe_values.JxW(q);		
+	R[i] +=-(1.0/RHO_T/CC_T)*fe_values.shape_value_component(i, q, ck)*(LASER)*fe_values.JxW(q);		
 	for (unsigned int j = 0; j < dim; j++){
-	  R[i] += (KK_T/RHO/CC_T)*fe_values.shape_grad_component(i, q,ck)[j]*c_j[q][j]*fe_values.JxW(q);
+	  R[i] += (KK_T/RHO_T/CC_T)*fe_values.shape_grad_component(i, q,ck)[j]*c_j[q][j]*fe_values.JxW(q);
 	}
 	
       }
@@ -118,9 +121,9 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //surface integral
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
-    double CHECKL=cell->face(f)->center()[0];
+    //double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
-    double CHECKW=cell->face(f)->center()[2];      
+    //double CHECKW=cell->face(f)->center()[2];      
     //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
       if(cell->face(f)->center()[1] == problemHeight /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {      
       //evaluate Residual on face
@@ -132,17 +135,18 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	  Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
 	  Sacado::Fad::DFad<double>  Tambient =Tamb;
 	  Sacado::Fad::DFad<double>  dTRAD= cface[q]*cface[q]*cface[q]*cface[q] - Tambient*Tambient*Tambient*Tambient;	 	  
-	  Sacado::Fad::DFad<double>  KK_T,CC_T;
+	  Sacado::Fad::DFad<double>  KK_T,CC_T,RHO_T;
 	  if (c_conv[q]<=TLL && c_conv[q]>=0.0)
 	  {
 	    //SS316
-	    KK_T=11.82+(1.06*pow(10.0,-2))*c_conv[q];
-	    CC_T=330.9+0.563*c_conv[q]-(4.015*pow(10.0,-4))*c_conv[q]*c_conv[q]+ (9.465*pow(10.0,-8))*c_conv[q]*c_conv[q]*c_conv[q];
-	   	    
+	    //KK_T=11.82+(1.06*pow(10.0,-2))*c_conv[q];
+	    //CC_T=330.9+0.563*c_conv[q]-(4.015*pow(10.0,-4))*c_conv[q]*c_conv[q]+ (9.465*pow(10.0,-8))*c_conv[q]*c_conv[q]*c_conv[q];
+	    KK_T=KK; CC_T=CC; RHO_T=RHO; 
+	    
 	  }
-	else if (c_conv[q]>=TLL) {KK_T=KK ; CC_T=CC;}
-	  R[i] += (1.0/RHO/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(cface[q]-Tambient)*fe_face_values.JxW(q);
-	  R[i] += (1.0/RHO/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
+	  else if (c_conv[q]>=TLL) {KK_T=KKL ; CC_T=CCL; RHO_T=RHOL;}
+	  R[i] += (1.0/RHO_T/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(cface[q]-Tambient)*fe_face_values.JxW(q);
+	  R[i] += (1.0/RHO_T/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
 
 	  
 	  }

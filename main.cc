@@ -138,17 +138,18 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uBC (DIMS, false); uBC[0]=true; uBC[1]=true;   
-    std::vector<bool> uBCB (DIMS, false); uBC[0]=true; uBC[1]=true;  uBCB[3]=true;    
+    std::vector<bool> uBC (DIMS, false); //uBC[0]=true; uBC[1]=true;   
+    std::vector<bool> uBCB (DIMS, false); //uBC[0]=true; uBC[1]=true;
+    uBCB[3]=true;    
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //left
-    VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraints,uBC);
-    VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraintsZero,uBC);
+    //VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraints,uBC);
+    //VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraintsZero,uBC);
 
     //right
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uBC);
-    VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
+    //VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    //VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
 
     //top
     // VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBC);
@@ -180,35 +181,35 @@ namespace phaseField1
     
     //Setup boundary conditions
     std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
-    FEValuesExtractors::Scalar pressure(dim);
-    typename DoFHandler<dim>::active_cell_iterator
-    cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
+    //FEValuesExtractors::Scalar pressure(dim);
+    //typename DoFHandler<dim>::active_cell_iterator
+      //cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
 
     //std::vector<bool> boundary_dofs(Pr_dof_handler.n_dofs(), false);
-    IndexSet boundary_dofs;
+    //IndexSet boundary_dofs;
     
     //constraints first dof of pressure to zero
-    DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
-    boundary_dofs);
+    //DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
+    //boundary_dofs);
 
-    const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
-    							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
+    //const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
+    //							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
 
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls       
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
 
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
 
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
 
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+    //VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
     
-   
-    Pr_constraints.add_line(first_boundary_dof);
+    
+    //Pr_constraints.add_line(first_boundary_dof);
     Pr_constraints.close ();
     Pr_constraintsZero.close ();
     L2_constraints.close ();
@@ -357,8 +358,8 @@ namespace phaseField1
 	Table<1, Sacado::Fad::DFad<double> > R(dofs_per_cell); 
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {R[i]=0.0;}
 	
-	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
-	
+	if (currentIncrement>20)residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
+		
 	residualForTherm(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime) ;
 	
 	//evaluate Residual(R) and Jacobian(R')

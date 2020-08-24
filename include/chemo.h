@@ -125,8 +125,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	    R[i]+= (mu/RHO_T)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
 	  }
 	  else  {
-	    //  RHO_T=RHO;
-	    //R[i]+= (mu/RHO_T)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
+	    RHO_T=RHO;
+	    R[i]+= (mu/RHO_T)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
 	  }
 	}
 	  
@@ -153,7 +153,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	}
 	else if (liquid_conv[q] < 0) {
 	  R[i]+=(0.24)*fe_values.shape_value_component(i, q, ck)*fe_values.JxW(q);
-	  R[i]*=((1.0)*(1.0)*vel[q][ck])/(0.00001);
+	  R[i]*=((1.0)*(1.0)*vel[q][ck])/(1.0e-6);
 	}
 	
 	//advection term
@@ -183,7 +183,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
-	  if (ck>=0 && ck< 2 && liquid_conv[q]>=1.0) {  
+	  if (ck>=0 && liquid_conv[q]>=1.0) {  
 	    R[i] +=-fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tface_j[q][ck])*fe_face_values.JxW(q);	    
 	  }
 	}

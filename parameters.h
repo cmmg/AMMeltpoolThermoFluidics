@@ -6,20 +6,20 @@
 #define problemHeight 5.0e-03   //[1]
 #define problemLength 10.0e-03 //[0]
 
-#define globalRefinementFactor 6
+#define globalRefinementFactor 5
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 1.0e-3
+#define TimeStep 1.0e-6
 #define TotalTime 20000*TimeStep
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 2
-#define YSubRf 1
+#define XSubRf 4
+#define YSubRf 2
 #define ZSubRf 1
 
 //Material parameters
@@ -43,7 +43,7 @@
 #define TSS 1533 //1878.0
 
 //scan speed
-#define VV 0.1*16.7e-03
+#define VV 16.7e-03
 
 //Thermal Conductivity
 #define KK 11.4

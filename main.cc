@@ -138,9 +138,9 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uBC (DIMS, false); //uBC[0]=true; uBC[1]=true;   
-    std::vector<bool> uBCB (DIMS, false); //uBC[0]=true; uBC[1]=true;
-    uBCB[3]=true;    
+    //    std::vector<bool> uBC (DIMS, false); uBC[0]=true; uBC[1]=true;   
+    //std::vector<bool> uBCB (DIMS, false); uBC[0]=true; uBC[1]=true;
+    //uBCB[3]=true;    
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //left
@@ -152,9 +152,9 @@ namespace phaseField1
     //VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
 
     //top
-    // VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBC);
-    //VectorTools::interpolate_boundary_values (dof_handler, 3, ConstantFunction<dim>(0.01,DIMS) , constraints,uBCT);
-    // VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
+    //VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    ///VectorTools::interpolate_boundary_values (dof_handler, 3, ConstantFunction<dim>(0.01,DIMS) , constraints,uBCT);
+      //VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
     
     //bottom
     std::vector<double> bottom (DIMS);
@@ -163,8 +163,8 @@ namespace phaseField1
     bottom[2]=0.0;
     bottom[3]=353.0;
     bottom[4]=0.0;
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(bottom), constraints,uBCB);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCB);
+    //VectorTools::interpolate_boundary_values (dof_handler, 2, ConstantFunction<dim>(bottom), constraints,uBCB);
+    //VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS) , constraintsZero,uBCB);
  
     constraints.close ();
     constraintsZero.close ();
@@ -358,7 +358,7 @@ namespace phaseField1
 	Table<1, Sacado::Fad::DFad<double> > R(dofs_per_cell); 
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {R[i]=0.0;}
 	
-	if (currentIncrement>20)residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
+	residualForChemo(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, ULocalConvConv,Pr_ULocalConv,Pr_ULocalConvConv,R,currentTime,totalTime);
 		
 	residualForTherm(fe_values, 0, fe_face_values, cell, dt, ULocal, ULocalConv, R, currentTime, totalTime) ;
 	

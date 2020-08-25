@@ -99,7 +99,7 @@ namespace phaseField1
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-    fe(FE_Q<dim>(2),2,FE_Q<dim>(1),1,FE_Q<dim>(1),2),
+    fe(FE_Q<dim>(2),2,FE_Q<dim>(1),3),
     dof_handler(triangulation),
     Pr_dof_handler(triangulation),
     pcout (std::cout, (Utilities::MPI::this_mpi_process(mpi_communicator)== 0)),
@@ -138,9 +138,11 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    //    std::vector<bool> uBC (DIMS, false); uBC[0]=true; uBC[1]=true;   
-    //std::vector<bool> uBCB (DIMS, false); uBC[0]=true; uBC[1]=true;
-    //uBCB[3]=true;    
+    std::vector<bool> uBC (DIMS, false); //uBC[0]=true; uBC[1]=true;   
+    std::vector<bool> uBCT (DIMS, false); //uBCT[1]=true;   
+    std::vector<bool> uBCB (DIMS, false); //uBC[0]=true; uBC[1]=true;
+    uBCB[3]=true;    
+
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //left
@@ -152,9 +154,9 @@ namespace phaseField1
     //VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
 
     //top
-    //VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBC);
+    //    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBCT);
     ///VectorTools::interpolate_boundary_values (dof_handler, 3, ConstantFunction<dim>(0.01,DIMS) , constraints,uBCT);
-      //VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBC);
+    //VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBCT);
     
     //bottom
     std::vector<double> bottom (DIMS);
@@ -600,7 +602,7 @@ namespace phaseField1
       pcout << "Solving for diffusion "<<std::endl;
       
     while (true){
-      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=20){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system();       
       current_norm=system_rhs.l2_norm();     
@@ -632,7 +634,7 @@ namespace phaseField1
       char buffer[200];          
       pcout << "Solving for projection "<<std::endl;	    
       while (true){
-      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+      if (currentIteration>=20){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system_projection();       
       current_norm=Pr_system_rhs.l2_norm();

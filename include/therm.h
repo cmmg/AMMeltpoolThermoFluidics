@@ -91,7 +91,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	
 	for (unsigned int j = 0; j < dim; j++){
 	  //this is zero when there is isothermal melting
-	  //R[i] +=(LATENT/CC_T)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
+	  R[i] +=(LATENT/CC_T)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
 	}
 
 	//Sink term laser

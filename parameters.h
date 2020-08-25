@@ -11,7 +11,7 @@
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 1.0e-6
+#define TimeStep 1.0e-4
 #define TotalTime 20000*TimeStep
 
 //output controls
@@ -37,13 +37,13 @@
 #define PDAS 0.5
 
 //Liquidus Temperature
-#define TLL 1609 //1928.0
+#define TLL 1609.0 //1928.0
 
 //Solidus Temperature
-#define TSS 1533 //1878.0
+#define TSS 1533.0 //1878.0
 
 //scan speed
-#define VV 16.7e-03
+#define VV 16.7e-04
 
 //Thermal Conductivity
 #define KK 11.4
@@ -57,9 +57,9 @@
 #define CCL 755.0
 
 //Density of Material
-#define RHO 7734 //4420.0
+#define RHO 7734.0 //4420.0
 
-#define RHOL 7578 //4420.0
+#define RHOL 7578.0 //4420.0
 
 //kinematic viscosity
 #define nu mu/RHOL

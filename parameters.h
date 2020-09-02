@@ -11,7 +11,7 @@
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 2.0
+#define TimeStep 10.0
 #define TotalTime 5000*TimeStep
 
 //output controls

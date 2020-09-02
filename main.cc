@@ -1176,7 +1176,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%1==0) output_results(currentIncrement);      
+      if (NSTEP%50==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

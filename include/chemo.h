@@ -124,19 +124,21 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	       
 	//viscous term
 	for (unsigned int j = 0; j < dim; j++){
-	  R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
+	  //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
+	  R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	  R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
 	}
 
-	 // pressure
-	R[i]+=-(1.0/RHO)*(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
-	R[i]+=-(1.0/RHO)*(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
-	R[i]+=-(1.0/RHO)*(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
+	 // pressure (kineitc)
+	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
+	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
 	
 	//free convection
 	if (ck==1) R[i]+=-fe_values.shape_value_component(i, q, ck)*(gravity*BETA*(T_conv[q]-TSS))*fe_values.JxW(q);
 	
 	double AA;
-	//pressure drop due to mush zone		
+	//presure drop due to mush zone		
 	AA=(1.0e+08)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q]))/(liquid_conv[q]*liquid_conv[q]*liquid_conv[q]+1.0e-03); 	
 	R[i]+=fe_values.shape_value_component(i, q, ck)*((AA)*vel[q][ck])*fe_values.JxW(q);
       

@@ -108,7 +108,8 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 
       else if (ck==4) {
 	Sacado::Fad::DFad<double> FRACTION;
-	FRACTION=std::tanh(1.5*(T[q]-TSS));
+	//FRACTION=std::tanh(1.5*(T[q]-TSS));
+	FRACTION=std::tanh(0.5*(T[q]-TSS));
 	FRACTION=(1+FRACTION)*0.5;
 	R[i] += fe_values.shape_value_component(i, q,ck)*(liquid[q]-FRACTION )*fe_values.JxW(q);	
       }

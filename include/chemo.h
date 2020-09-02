@@ -137,7 +137,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	
 	double AA;
 	//pressure drop due to mush zone		
-	AA=(1.0e+06)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q]))/(liquid_conv[q]*liquid_conv[q]*liquid_conv[q]+1.0e-03); 	
+	AA=(1.0e+08)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q]))/(liquid_conv[q]*liquid_conv[q]*liquid_conv[q]+1.0e-03); 	
 	R[i]+=fe_values.shape_value_component(i, q, ck)*((AA)*vel[q][ck])*fe_values.JxW(q);
       
 

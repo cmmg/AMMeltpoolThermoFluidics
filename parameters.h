@@ -6,13 +6,13 @@
 #define problemHeight 6.35/100.0   //[1]
 #define problemLength 3.175/100.0 //[0]
 
-#define globalRefinementFactor 0
+#define globalRefinementFactor 1
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.2
-#define TotalTime 500*TimeStep
+#define TimeStep 2.0
+#define TotalTime 5000*TimeStep
 
 //output controls
 #define outputFileName "solution"

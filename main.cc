@@ -1,3 +1,4 @@
+
 //Computational Mechanics and Multiphysics Group @ UW-Madison
 //Basic framework for Phase Field (Cahn-Hilliard mixed formulation)
 //Created May 2018
@@ -77,6 +78,8 @@ namespace phaseField1
     IndexSet                                  Pr_locally_relevant_dofs;
     DoFHandler<dim>                           Pr_dof_handler;
     ConstraintMatrix                          Pr_constraints, Pr_constraintsZero;
+    AffineConstraints<double>                 Pr_mean_value_constraints;
+
     LA::MPI::SparseMatrix                     Pr_system_matrix;
     LA::MPI::Vector                           Pr_locally_relevant_solution,Pr_U, Pr_Un, Pr_UGhost, Pr_UnGhost, Pr_dU;
     LA::MPI::Vector                           Pr_system_rhs;
@@ -118,7 +121,7 @@ namespace phaseField1
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-    fe(FE_Q<dim>(2),2,FE_Q<dim>(1),3),
+    fe(FE_Q<dim>(2),2,FE_Q<dim>(1),1,FE_Q<dim>(2),2),
     dof_handler(triangulation),
     Pr_dof_handler(triangulation),
     T_dof_handler(triangulation),
@@ -192,7 +195,7 @@ namespace phaseField1
   
   template <int dim>
   void phaseField<dim>::applyBoundaryConditions_projection(const unsigned int increment){
-    Pr_constraints.clear (); L2_constraints.clear();
+    Pr_constraints.clear (); L2_constraints.clear(); 
     Pr_constraints.reinit (Pr_locally_relevant_dofs);  L2_constraints.reinit (Pr_locally_relevant_dofs); 
     //DoFTools::make_hanging_node_constraints (dof_handler, constraints);
     Pr_constraintsZero.clear (); 
@@ -201,7 +204,9 @@ namespace phaseField1
     
     //Setup boundary conditions
     std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
+
     FEValuesExtractors::Scalar pressure(dim);
+
     typename DoFHandler<dim>::active_cell_iterator
       cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
 
@@ -216,20 +221,28 @@ namespace phaseField1
 							 std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
    
    // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls       
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
 
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
 
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
 
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-   VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
+   //VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
     
-    
-   Pr_constraints.add_line(first_boundary_dof);
+   Pr_mean_value_constraints.clear();
+   Pr_mean_value_constraints.add_line(first_boundary_dof);
+
+   for (unsigned int i = first_boundary_dof + 1; i < Pr_dof_handler.n_dofs(); ++i)
+     //     if (boundary_dofs[i] == true)
+     if (boundary_dofs.is_element(i) == true)
+       Pr_mean_value_constraints.add_entry(first_boundary_dof, i, -1);
+   Pr_mean_value_constraints.close();
+
+   //Pr_constraints.add_line(first_boundary_dof);
    Pr_constraints.close ();
    Pr_constraintsZero.close ();
    L2_constraints.close ();
@@ -343,10 +356,14 @@ namespace phaseField1
     
     DynamicSparsityPattern Pr_dsp (Pr_locally_relevant_dofs);
     DoFTools::make_sparsity_pattern (Pr_dof_handler, Pr_dsp, Pr_constraints, false);
-    SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, Pr_locally_relevant_dofs);
-    Pr_system_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
-    L2_Mass_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
+    
+    Pr_mean_value_constraints.condense(Pr_dsp);
 
+SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, Pr_locally_relevant_dofs);
+    Pr_system_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
+
+
+    L2_Mass_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
     DynamicSparsityPattern L2_dsp (Pr_locally_relevant_dofs);
     DoFTools::make_sparsity_pattern (Pr_dof_handler, L2_dsp, L2_constraints, false);
     SparsityTools::distribute_sparsity_pattern (L2_dsp, Pr_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, Pr_locally_relevant_dofs);

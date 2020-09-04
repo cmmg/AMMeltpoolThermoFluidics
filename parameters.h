@@ -18,8 +18,8 @@
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 53
-#define YSubRf 106
+#define XSubRf 106 //53
+#define YSubRf 212 //106
 #define ZSubRf 1
 
 //Material parameters

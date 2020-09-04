@@ -831,7 +831,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
   //Solve
   template <int dim>
   void phaseField<dim>::solve() { 
-      double res=1, tol=1.0e-12, abs_tol=1.0e-14, initial_norm=0, current_norm=0;
+      double res=1, tol=1.0e-12, abs_tol=1.0e-11, initial_norm=0, current_norm=0;
       double machineEPS=1.0e-15;
       currentIteration=0;
       char buffer[200];         
@@ -867,7 +867,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
    //Solve
   template <int dim>
   void phaseField<dim>::solve_Pr() {     
-      double res=1, tol=1.0e-12, abs_tol=1.0e-14, initial_norm=0, current_norm=0;
+      double res=1, tol=1.0e-12, abs_tol=1.0e-11, initial_norm=0, current_norm=0;
       double machineEPS=1.0e-15;
       currentIteration=0;
       char buffer[200];          
@@ -897,7 +897,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
    //Solve
   template <int dim>
   void phaseField<dim>::solve_temp() {     
-      double res=1, tol=1.0e-12, abs_tol=1.0e-14, initial_norm=0, current_norm=0;
+      double res=1, tol=1.0e-12, abs_tol=1.0e-11, initial_norm=0, current_norm=0;
       double machineEPS=1.0e-15;
       currentIteration=0;
       char buffer[200];          
@@ -1176,7 +1176,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%1==0) output_results(currentIncrement);      
+      if (NSTEP%50==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

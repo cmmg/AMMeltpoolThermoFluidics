@@ -3,8 +3,8 @@
 #define FEOrder 2
 
 #define problemWidth  //[2]
-#define problemHeight 6.35/100.0   //[1]
-#define problemLength 3.175/100.0 //[0]
+#define problemHeight 5.0e-03   //[1]
+#define problemLength 20.0e-03//[0]
 
 #define globalRefinementFactor 2.0
 #define maxRefinementLevel (globalRefinementFactor+2)
@@ -22,49 +22,44 @@
 #define YSubRf 106 //106
 #define ZSubRf 1
 
-//Material parameters
+//Material parameters of ss316
 
 //viscosity
-#define mu 1.81e-03
+#define mu 7.0e-03
 
 //surface tension grad
-#define dGammadT -3.7e-04
+#define dGammadT -0.4e-03
 
 //expansion coeff
-#define BETA 1.2e-04
+#define BETA 5.85e-05
 
 //PDAS in micron
 #define PDAS 0.5
 
 //Liquidus Temperature
-#define TLL 305.78 //1928.0
+#define TLL 1733.0
 
 //Solidus Temperature
-#define TSS 302.78 //1878.0
+#define TSS 1693.0
+
+//melting range
+#define deltaT 40.0
 
 //scan speed
 #define VV 16.7e-04
 
 //Thermal Conductivity
-#define KK 32.0
+#define KK 11.82+(1.06e-02)*T_conv[q]
 
 #define KKL 32.0
 
 //Heat Specific Capacity C
-#define CC 381.5
+#define CC 330.9+(0.5653)*T_conv[q]-(4.015e-04)*T_conv[q]*T_conv[q]+(9.465e-08)*T_conv[q]*T_conv[q]*T_conv[q]
 
 #define CCL 381.5
 
 //Density of Material
-#define RHO 6093.0 //4420.0
-
-#define RHOL 6093.0 //4420.0
-
-//kinematic viscosity
-#define nu mu/RHOL
-
-//kinematic viscosity
-#define mus 1.0e+04
+#define RHO 7800.0 //4420.0
 
 //Ambient Temperature
 #define Tamb 301.3
@@ -73,7 +68,7 @@
 #define HH 100.0
 
 //Latent Heat
-#define LATENT 80160.0 //(2.72*pow(10.0,5))
+#define LATENT 2.72e+05
 
 //Radiation parameters
 #define SIG (5.67037*pow(10.0,-8))
@@ -89,6 +84,6 @@
 
 
 //gravity
-#define gravity 10.0
+#define gravity 9.8
 
 

@@ -62,7 +62,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //Interpolate over faces
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
-    //    double CHECKL=cell->face(f)->center()[0];
+    //double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
     //double CHECKW=cell->face(f)->center()[2];      
     //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
@@ -81,12 +81,13 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //evaluate Residual on cell
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-    Sacado::Fad::DFad<double>  KK_T,RHOCC_T;      
+    Sacado::Fad::DFad<double>  KK_T,CC_T;      
     for (unsigned int q=0; q<n_q_points; ++q) {     
       if (ck==3) {		
 	//KK_T=KK+liquid[q]*(KKL-KK);
 	//RHOCC_T=CC*RHO+liquid[q]*(CCL*RHOL-CC*RHO);
-
+	KK_T=KK;CC_T=CC;
+	
 	//Mass term
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*T[q]-4.0*T_conv[q]+T_convconv[q])*fe_values.JxW(q);
 
@@ -108,9 +109,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 
       else if (ck==4) {
 	Sacado::Fad::DFad<double> FRACTION;
-	//FRACTION=std::tanh(1.5*(T[q]-TSS));
-	//FRACTION=std::tanh(0.9*(T[q]-TSS));
-	FRACTION=std::tanh(1.5*(T[q]-TSS));
+	FRACTION=std::tanh((5.0/deltaT)*(T[q]-0.5*(TSS+TLL)));
 	FRACTION=(1+FRACTION)*0.5;
 	R[i] += fe_values.shape_value_component(i, q,ck)*(liquid[q]-FRACTION )*fe_values.JxW(q);	
       }
@@ -134,15 +133,13 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
 	  if (ck==3) {  
 	    //Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
-	  //Sacado::Fad::DFad<double>  Tambient =Tamb;
-	  //Sacado::Fad::DFad<double>  dTRAD= cface[q]*cface[q]*cface[q]*cface[q] - Tambient*Tambient*Tambient*Tambient;	 	  
-	  //Sacado::Fad::DFad<double>  KK_T,CC_T,RHO_T;
-	 
-	  //KK_T=KK+liquid[q]*(KKL-KK);
-	  //RHOCC_T=CC*RHO+liquid[q]*(CCL*RHOL-CC*RHO);	  
-	  //R[i] += (1.0/RHO_T/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(cface[q]-Tambient)*fe_face_values.JxW(q);
-	  //R[i] += (1.0/RHO_T/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
-
+	    Sacado::Fad::DFad<double>  Tambient =Tamb;
+	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
+	    Sacado::Fad::DFad<double>  KK_T;CC_T;
+	    KK_T= 11.82+(1.06e-02)*Tface_conv[q];
+	    CC_T= 330.9+(0.5653)*Tface_conv[q]-(4.015e-04)*Tface_conv[q]*Tface_conv[q]+(9.465e-08)*Tface_conv[q]*Tface_conv[q]*Tface_conv[q];	     
+	    R[i] += (1.0/RHO/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tambient)*fe_face_values.JxW(q);
+	    R[i] += (1.0/RHO/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
 	  
 	  }
 	}

@@ -1,4 +1,3 @@
-
 //Computational Mechanics and Multiphysics Group @ UW-Madison
 //Basic framework for Phase Field (Cahn-Hilliard mixed formulation)
 //Created May 2018
@@ -852,9 +851,12 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     }
 
     pcout << std::endl;
-    solve_Pr();// for projection solve : solve based on converged U and not Un
-    L2_projection();
-    update_pressure(); //update values of U and UGhost
+
+    if (1){
+      solve_Pr();// for projection solve : solve based on converged U and not Un
+      L2_projection();
+      update_pressure(); //update values of U and UGhost
+    }
     Unn=Un; UnnGhost=Unn; 
     Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
     solve_temp();
@@ -1176,7 +1178,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%50==0) output_results(currentIncrement);      
+      if (NSTEP%20==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

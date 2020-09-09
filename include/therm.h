@@ -92,7 +92,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 
 	//Advection term : temperature and phi
 	for (unsigned int j = 0; j < dim; j++){
-	  R[i] +=(LATENT/CC)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
+	  //R[i] +=(LATENT/CC)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
 	  R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(T_j[q][j])*fe_values.JxW(q);
 	}
 

@@ -6,20 +6,20 @@
 #define problemHeight 6.35/100.0   //[1]
 #define problemLength 3.175/100.0 //[0]
 
-#define globalRefinementFactor 1
+#define globalRefinementFactor 2.0
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.2
-#define TotalTime 500*TimeStep
+#define TimeStep 0.1
+#define TotalTime 1000*TimeStep
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 106 //53
-#define YSubRf 212 //106
+#define XSubRf 53 //53
+#define YSubRf 106 //106
 #define ZSubRf 1
 
 //Material parameters

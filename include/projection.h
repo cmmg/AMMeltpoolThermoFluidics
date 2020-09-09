@@ -63,8 +63,15 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
 	for (unsigned int j=0; j<dim; j++) {
 	  Rp[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);
 	}
+	//if kinetic pressure is used
 	Rp[i]+=-(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][0][0])*fe_values.JxW(q);
-        Rp[i]+=-(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][1][1])*fe_values.JxW(q);			
+        Rp[i]+=-(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][1][1])*fe_values.JxW(q);
+	
+	//if dynamic pressure is used
+	//Rp[i]+=-(RHO)*(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][0][0])*fe_values.JxW(q);
+        //Rp[i]+=-(RHO)*(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][1][1])*fe_values.JxW(q);
+
+			
       }               
     }
   }

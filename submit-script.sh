@@ -22,4 +22,4 @@ rm -rf CMakeCache.txt cmake_install.cmake Makefile CMakeFiles
 cmake .
 cmake -DCMAKE_BUILD_TYPE=Release . 
 make
-mpirun -np 20 ./main
+mpirun -np 10 ./main

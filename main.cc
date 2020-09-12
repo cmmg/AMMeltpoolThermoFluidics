@@ -27,7 +27,7 @@ namespace phaseField1
 	values(0)=0.0;  //ux
 	values(1)=0.0; //uy
 	values(2)=0.0; //pressure
-	values(3)=Tamb ;//temp
+	values(3)=353.0 ;//temp
 	values(4)=0.0; //liqfrac
 	
     }
@@ -161,7 +161,8 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true;   
+    std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true;
+    std::vector<bool> uBT (DIMS, false); uBT[1]=true;
     //std::vector<bool> uBL (DIMS, false); uBL[0]=true;    
     // std::vector<bool> uBR (DIMS, false); uBR[0]=true;   
     //std::vector<bool> uBT (DIMS, false); uBT[1]=true;    
@@ -178,8 +179,8 @@ namespace phaseField1
     VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
 
     //top
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraints,uB);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraintsZero,uB);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraints,uBT);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraintsZero,uBT);
 
     //botom
     VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uB);
@@ -260,18 +261,18 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uBL (DIMS, false); uBL[3]=true;    
-    std::vector<bool> uBR (DIMS, false); uBR[3]=true;   
+    //std::vector<bool> uBL (DIMS, false); uBL[3]=true;    
+    std::vector<bool> uBB (DIMS, false); uBB[3]=true;   
   
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //left
-    VectorTools::interpolate_boundary_values (T_dof_handler, 0, ConstantFunction<dim>(9.7,DIMS), T_constraints,uBL);
-    VectorTools::interpolate_boundary_values (T_dof_handler, 0, ZeroFunction<dim>(DIMS), T_constraintsZero,uBL);
+    //VectorTools::interpolate_boundary_values (T_dof_handler, 0, ConstantFunction<dim>(9.7,DIMS), T_constraints,uBL);
+    //VectorTools::interpolate_boundary_values (T_dof_handler, 0, ZeroFunction<dim>(DIMS), T_constraintsZero,uBL);
 
-    //right
-    VectorTools::interpolate_boundary_values (T_dof_handler, 1, ZeroFunction<dim>(DIMS) , T_constraints,uBR);
-    VectorTools::interpolate_boundary_values (T_dof_handler, 1, ZeroFunction<dim>(DIMS) , T_constraintsZero,uBR);
+    //bottom
+    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraints,uBB);
+    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraintsZero,uBB);
 
     T_constraints.close ();
     T_constraintsZero.close ();
@@ -1177,8 +1178,13 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       // UnnGhost=UnGhost; //saving k-1 data for u and p
       //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
+      
+      //solve_temp();
+      //update_TintoU();
+      //Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
+
       int NSTEP=(currentTime/dt);
-      if (NSTEP%20==0) output_results(currentIncrement);      
+      if (NSTEP%1==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

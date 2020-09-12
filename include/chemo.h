@@ -155,11 +155,15 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	//free convection
 	if (ck==1) R[i]+=-fe_values.shape_value_component(i, q, ck)*(gravity*BETA*(T_conv[q]-TSS))*fe_values.JxW(q);
 	
-	double AA;
+	double AA,num;
 	//presure drop due to mush zone		
-	AA=(1.0e+03)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q]))/(std::abs(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+1.0e-05); 	
+	if (liquid_conv[q]>1) {num=1.0;}
+	else if(liquid_conv[q]<=1 && liquid_conv[q]>0) {num=liquid_conv[q];}
+	else {num=0.0;}
+	//AA=(1.0e+03)*((1.0-lquid_conv[q])*(1.0-liquid_conv[q]))/(std::abs(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+1.0e-05); 	
+	AA=(1.0e+03)*((1.0-num)*(1.0-num))/(std::abs(num*num*num)+1.0e-05); 	
 	R[i]+=fe_values.shape_value_component(i, q, ck)*((AA)*vel[q][ck])*fe_values.JxW(q);
-      
+	
 	
 	//advection term
 	//first part	
@@ -182,14 +186,14 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     //double CHECKW=cell->face(f)->center()[2];      
     //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
       if(cell->face(f)->center()[1] == problemHeight /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {      
-      //evaluate Residual on face
-      for (unsigned int i=0; i<dofs_per_cell; ++i) {
-	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
+	//evaluate Residual on face
+	for (unsigned int i=0; i<dofs_per_cell; ++i) {
+	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	
-	for (unsigned int q=0; q<n_q_points_face; ++q) {
-	  if (ck==0 && LiqfaceConv[q]>0.05) {  
-	    //R[i] +=-fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tface_j[q][ck])*fe_face_values.JxW(q);
-	  }
+	  for (unsigned int q=0; q<n_q_points_face; ++q) {
+	    if (ck==0) {  
+	      R[i] +=-fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);
+	    }
 	}
       }
 

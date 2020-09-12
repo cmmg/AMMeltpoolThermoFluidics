@@ -2,24 +2,24 @@
 #define DIMS 5 //2
 #define FEOrder 2
 
-#define problemWidth  //[2]
-#define problemHeight 5.0e-03   //[1]
-#define problemLength 20.0e-03//[0]
+#define problemWidth  (5.0/1000.0) //[2]
+#define problemHeight (5.0/1000.0)   //[1]
+#define problemLength (20.0/1000.0)//[0]
 
-#define globalRefinementFactor 2.0
+#define globalRefinementFactor 0
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
 #define TimeStep 0.1
-#define TotalTime 1000*TimeStep
+#define TotalTime 250*TimeStep
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 53 //53
-#define YSubRf 106 //106
+#define XSubRf 200 //53
+#define YSubRf 50 //106
 #define ZSubRf 1
 
 //Material parameters of ss316
@@ -46,17 +46,17 @@
 #define deltaT 40.0
 
 //scan speed
-#define VV 16.7e-04
+#define VV 1.0e-03
 
 //Thermal Conductivity
 #define KK 11.82+(1.06e-02)*T_conv[q]
 
-#define KKL 32.0
+//#define KK 32.0
 
 //Heat Specific Capacity C
 #define CC 330.9+(0.5653)*T_conv[q]-(4.015e-04)*T_conv[q]*T_conv[q]+(9.465e-08)*T_conv[q]*T_conv[q]*T_conv[q]
 
-#define CCL 381.5
+//#define CC 381.5
 
 //Density of Material
 #define RHO 7800.0 //4420.0
@@ -78,7 +78,7 @@
 #define DD 2.0
 #define BB 2.0
 #define spotRadius (1.5/1000.0)
-#define PP 4000.0
+#define PP 3.5*90.0
 #define LAYER (0.1/1000.0)
 #define ABSORB 1.0
 

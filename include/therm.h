@@ -19,7 +19,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   unsigned int n_q_points_face= fe_face_values.n_quadrature_points;
   const unsigned int faces_per_cell = GeometryInfo<dim>::faces_per_cell;
 
-  dealii::Table<1,double> T_conv(n_q_points);
+  dealii::Table<1,double> T_conv(n_q_points),Tface_conv(n_q_points);
   dealii::Table<1,double> T_convconv(n_q_points);
 
   dealii::Table<1,double> liquid_conv(n_q_points);
@@ -68,10 +68,13 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
     if(cell->face(f)->center()[1] == problemHeight) {      
       for (unsigned int q=0; q<n_q_points_face; ++q) {
-	Tface[q]=0.0;    
+	Tface[q]=0.0; Tface_conv[q]=0.0;   
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-	  if (ck==3) {Tface[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocal[i]; }
+	  if (ck==3) {
+	    Tface[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocal[i]; 
+	    Tface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i]; 
+	  }
 	}       
       }
     }
@@ -98,12 +101,21 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	}
 
 	//sink term latent
-	R[i] +=(LATENT/CC)*(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*liquid[q]-4.0*liquid_conv[q]+liquid_convconv[q])*fe_values.JxW(q);
+	R[i] +=(LATENT/CC_T)*(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*liquid[q]-4.0*liquid_conv[q]+liquid_convconv[q])*fe_values.JxW(q);
 	
 	//diffusion terms
 	for (unsigned int j = 0; j < dim; j++){	
-	  R[i] +=(KK/RHO/CC)*fe_values.shape_grad_component(i, q,ck)[j]*T_j[q][j]*fe_values.JxW(q);
+	  R[i] +=(KK_T/RHO/CC_T)*fe_values.shape_grad_component(i, q,ck)[j]*T_j[q][j]*fe_values.JxW(q);
 	}
+
+	//Laser sinl Term
+	//Sink term laser
+	Point<dim> qPoint=fe_values.quadrature_point(q);  
+	Sacado::Fad::DFad<double>  LASER =(ABSORB)*DD*(PP/3.1416/spotRadius/spotRadius/LAYER);
+	LASER*=std::exp(-(BB/spotRadius/spotRadius)*((qPoint[0]-VV*currentTime)*(qPoint[0]-VV*currentTime)))  ;
+	//LASER*=std::exp(-(BB/spotRadius/spotRadius)*((2.0*qPoint[2]-problem_Width)*(2.0*qPoint[2]-problem_Width) ))  ;
+	LASER*=std::exp(-(BB/LAYER/LAYER)*((qPoint[1]-problemHeight)*(qPoint[1]-problemHeight) ))  ;
+	R[i] +=-(1.0/RHO/CC_T)*fe_values.shape_value_component(i, q, ck)*(LASER)*fe_values.JxW(q);
 	
       }
 
@@ -133,12 +145,12 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
 	  if (ck==3) {  
 	    //Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
-	    Sacado::Fad::DFad<double>  Tambient =Tamb;
 	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
-	    Sacado::Fad::DFad<double>  KK_T;CC_T;
+	    Sacado::Fad::DFad<double>  KK_T,CC_T;
 	    KK_T= 11.82+(1.06e-02)*Tface_conv[q];
 	    CC_T= 330.9+(0.5653)*Tface_conv[q]-(4.015e-04)*Tface_conv[q]*Tface_conv[q]+(9.465e-08)*Tface_conv[q]*Tface_conv[q]*Tface_conv[q];	     
-	    R[i] += (1.0/RHO/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tambient)*fe_face_values.JxW(q);
+	    KK_T=KK;CC_T=CC;
+	    R[i] += (1.0/RHO/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tamb)*fe_face_values.JxW(q);
 	    R[i] += (1.0/RHO/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
 	  
 	  }

@@ -36,18 +36,18 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     for (unsigned int j=0; j<dim; j++) {T_j[q][j]=0.0; liquid_j[q][j]=0.0; vel[q][j]=0.0; }
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;     
-       if (ck>=0 && ck< 2) { 
+       if (ck>=0 && ck< 3) { 
 	 vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
       }
            
-       else if (ck==3) { 
+       else if (ck==4) { 
 	T[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocal[i]; T_conv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConv[i];
 	T_convconv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConvConv[i];
 	for (unsigned int j=0; j<dim; j++) {
 	  T_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*T_ULocal[i];	  
 	}
       }
-      else if (ck==4) {
+      else if (ck==5) {
 	liquid[q]+=fe_values.shape_value_component(i, q,ck)*T_ULocal[i];
 	liquid_conv[q]+=fe_values.shape_value_component(i, q,ck)*T_ULocalConv[i];
 	liquid_convconv[q]+=fe_values.shape_value_component(i, q,ck)*T_ULocalConvConv[i];
@@ -62,16 +62,16 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //Interpolate over faces
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
-    //double CHECKL=cell->face(f)->center()[0];
+    double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
-    //double CHECKW=cell->face(f)->center()[2];      
-    //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
-    if(cell->face(f)->center()[1] == problemHeight) {      
+    double CHECKW=cell->face(f)->center()[2];      
+    if(CHECKL ==0 ||CHECKL== problemLength||CHECKW ==0 ||CHECKW== problemWidth||CHECKH== problemHeight) {
+    //    if(cell->face(f)->center()[1] == problemHeight) {      
       for (unsigned int q=0; q<n_q_points_face; ++q) {
 	Tface[q]=0.0; Tface_conv[q]=0.0;   
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-	  if (ck==3) {
+	  if (ck==4) {
 	    Tface[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocal[i]; 
 	    Tface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i]; 
 	  }
@@ -86,7 +86,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
     Sacado::Fad::DFad<double>  KK_T,CC_T;      
     for (unsigned int q=0; q<n_q_points; ++q) {     
-      if (ck==3) {		
+      if (ck==4) {		
 	//KK_T=KK+liquid[q]*(KKL-KK);
 	//RHOCC_T=CC*RHO+liquid[q]*(CCL*RHOL-CC*RHO);
 	KK_T=KK;CC_T=CC;
@@ -113,13 +113,13 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	Point<dim> qPoint=fe_values.quadrature_point(q);  
 	Sacado::Fad::DFad<double>  LASER =(ABSORB)*DD*(PP/3.1416/spotRadius/spotRadius/LAYER);
 	LASER*=std::exp(-(BB/spotRadius/spotRadius)*((qPoint[0]-VV*currentTime)*(qPoint[0]-VV*currentTime)))  ;
-	//LASER*=std::exp(-(BB/spotRadius/spotRadius)*((2.0*qPoint[2]-problem_Width)*(2.0*qPoint[2]-problem_Width) ))  ;
+	LASER*=std::exp(-(BB/spotRadius/spotRadius)*((2.0*qPoint[2]-problemWidth)*(2.0*qPoint[2]-problemWidth) ))  ;
 	LASER*=std::exp(-(BB/LAYER/LAYER)*((qPoint[1]-problemHeight)*(qPoint[1]-problemHeight) ))  ;
 	R[i] +=-(1.0/RHO/CC_T)*fe_values.shape_value_component(i, q, ck)*(LASER)*fe_values.JxW(q);
 	
       }
 
-      else if (ck==4) {
+      else if (ck==5) {
 	Sacado::Fad::DFad<double> FRACTION;
 	FRACTION=std::tanh((5.0/deltaT)*(T[q]-0.5*(TSS+TLL)));
 	FRACTION=(1+FRACTION)*0.5;
@@ -133,17 +133,17 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //surface integral
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
-    //double CHECKL=cell->face(f)->center()[0];
+    double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
-    //double CHECKW=cell->face(f)->center()[2];      
-    //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
-      if(cell->face(f)->center()[1] == problemHeight /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {      
+    double CHECKW=cell->face(f)->center()[2];      
+    if(CHECKL ==0 ||CHECKL== problemLength||CHECKW ==0 ||CHECKW== problemWidth||CHECKH==problemHeight) {
+    //  if(cell->face(f)->center()[1] == problemHeight && cell->face(f)->center()[2]==0.5*problemWidth) {      
       //evaluate Residual on face
       for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
-	  if (ck==3) {  
+	  if (ck==4) {  
 	    //Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
 	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
 	    Sacado::Fad::DFad<double>  KK_T,CC_T;

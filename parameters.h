@@ -1,10 +1,10 @@
 //problem geometry, mesh control
-#define DIMS 5 //2
+#define DIMS 6 //2
 #define FEOrder 2
 
-#define problemWidth  (5.0/1000.0) //[2]
-#define problemHeight (5.0/1000.0)   //[1]
-#define problemLength (20.0/1000.0)//[0]
+#define problemHeight  (3.0/1000.0) //[1]
+#define problemWidth (3.0/1000.0)   //[2]
+#define problemLength (5.0/1000.0)//[0]
 
 #define globalRefinementFactor 0
 #define maxRefinementLevel (globalRefinementFactor+2)
@@ -18,9 +18,9 @@
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 200 //53
-#define YSubRf 50 //106
-#define ZSubRf 1
+#define XSubRf 50 //53
+#define YSubRf 25 //106
+#define ZSubRf 25
 
 //Material parameters of ss316
 
@@ -77,7 +77,7 @@
 //Laser parameters
 #define DD 2.0
 #define BB 2.0
-#define spotRadius (1.5/1000.0)
+#define spotRadius (1.0/1000.0)
 #define PP 3.5*90.0
 #define LAYER (0.1/1000.0)
 #define ABSORB 1.0

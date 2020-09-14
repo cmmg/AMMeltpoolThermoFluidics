@@ -2,7 +2,7 @@
 #This file is called submit-script.sh
 #SBATCH --partition=compphys # default "univ", if not specified
 #SBATCH --time=2-00:00:00 # run time in days-hh:mm:ss
-#SBATCH --nodes=4# require 2 nodes
+#SBATCH --nodes=6# require 2 nodes
 #SBATCH --ntasks-per-node=16            # (by default, "ntasks"="cpus")
 #SBATCH --mem-per-cpu=4000# RAM per CPU core, in MB (default 4 GB/core)
 #SBATCH --job-name="cmake"

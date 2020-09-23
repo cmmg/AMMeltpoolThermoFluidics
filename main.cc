@@ -178,13 +178,13 @@ namespace phaseField1
     VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uB);
     VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
 
-    //top
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraints,uBT);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraintsZero,uBT);
+    //bottom
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraints,uB);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraintsZero,uB);
 
-    //botom
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uB);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
+    //top
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBT);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBT);
 
 
     

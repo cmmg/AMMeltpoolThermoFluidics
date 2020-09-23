@@ -78,7 +78,7 @@
 #define DD 2.0
 #define BB 2.0
 #define spotRadius (1.5/1000.0)
-#define PP 3.5*90.0
+#define PP 2.0*90.0
 #define LAYER (0.1/1000.0)
 #define ABSORB 1.0
 

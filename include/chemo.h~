@@ -189,8 +189,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;	
 	  for (unsigned int q=0; q<n_q_points_face; ++q) {
-	    if ((ck==0 ||ck==2) && (LiqfaceConv[q]>0.0)) {  
-	      R[i] +=-(0.01)*(1.0/RHO)*fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);	  
+	    if (ck==0 ||ck==2 /*&& LiqfaceConv[q]>0.99*/) {  
+	      R[i] +=-(0.001)*(1.0/RHO)*fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);	  
 	    }
 
 	}

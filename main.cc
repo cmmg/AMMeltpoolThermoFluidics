@@ -163,7 +163,7 @@ namespace phaseField1
    
     //Setup boundary conditions
     std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true;uB[2]=true; 
-    std::vector<bool> uBT (DIMS, false); uBT[1]=true;
+    std::vector<bool> uBT (DIMS, false); uBT[1]=true; 
     //std::vector<bool> uBL (DIMS, false); uBL[0]=true;    
     // std::vector<bool> uBR (DIMS, false); uBR[0]=true;   
     //std::vector<bool> uBT (DIMS, false); uBT[1]=true;    
@@ -179,13 +179,13 @@ namespace phaseField1
     VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraints,uB);
     VectorTools::interpolate_boundary_values (dof_handler, 1, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
 
-    //top
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraints,uBT);
-    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraintsZero,uBT);
+    //bottom
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraints,uB);
+    VectorTools::interpolate_boundary_values (dof_handler, 2, ZeroFunction<dim>(DIMS), constraintsZero,uB);
 
-    //botom
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uB);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
+    //top
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBT);
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBT);
 
 
     //front
@@ -864,11 +864,11 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 
     pcout << std::endl;
 
-    if (1){
-      solve_Pr();// for projection solve : solve based on converged U and not Un
-      L2_projection();
-      update_pressure(); //update values of U and UGhost
-    }
+   
+    solve_Pr();// for projection solve : solve based on converged U and not Un
+    L2_projection();
+    update_pressure(); //update values of U and UGhost
+    
     Unn=Un; UnnGhost=Unn; 
     Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
     solve_temp();
@@ -1161,7 +1161,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     numRepetitions.push_back(YSubRf); // y refinement
     numRepetitions.push_back(ZSubRf); // z refinement
     Point<dim> p1 (0,0,0);
-    Point<dim> p2 (problemLength,problemWidth,problemHeight);
+    Point<dim> p2 (problemLength,problemHeight,problemWidth);
     GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
    
 
@@ -1188,15 +1188,12 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     currentIncrement=0;
     for (currentTime=2*dt; currentTime<totalTime; currentTime+=dt){
       currentIncrement++;
-      pcout << std::endl;
-      // UnnGhost=UnGhost; //saving k-1 data for u and p
-      //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
+      pcout << std::endl;    
       solve(); //for diffuse solve       
       
       //solve_temp();
       //update_TintoU();
       //Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
-
       int NSTEP=(currentTime/dt);
       if (NSTEP%1==0) output_results(currentIncrement);      
       pcout << std::endl;

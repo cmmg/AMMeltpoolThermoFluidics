@@ -89,7 +89,10 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
       if (ck==4) {		
 	//KK_T=KK+liquid[q]*(KKL-KK);
 	//RHOCC_T=CC*RHO+liquid[q]*(CCL*RHOL-CC*RHO);
-	KK_T=KK;CC_T=CC;
+	if (T_conv[q]<TLL) {KK_T=KK;CC_T=CC;}
+	else {
+	  KK_T=KKS; CC_T=CCS;
+	}
 	
 	//Mass term
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*T[q]-4.0*T_conv[q]+T_convconv[q])*fe_values.JxW(q);
@@ -136,6 +139,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
     double CHECKW=cell->face(f)->center()[2];      
+
     if(CHECKL ==0 ||CHECKL== problemLength||CHECKW ==0 ||CHECKW== problemWidth||CHECKH==problemHeight) {
     //  if(cell->face(f)->center()[1] == problemHeight && cell->face(f)->center()[2]==0.5*problemWidth) {      
       //evaluate Residual on face
@@ -147,9 +151,8 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	    //Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
 	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
 	    Sacado::Fad::DFad<double>  KK_T,CC_T;
-	    KK_T= 11.82+(1.06e-02)*Tface_conv[q];
-	    CC_T= 330.9+(0.5653)*Tface_conv[q]-(4.015e-04)*Tface_conv[q]*Tface_conv[q]+(9.465e-08)*Tface_conv[q]*Tface_conv[q]*Tface_conv[q];	     
-	    KK_T=KK;CC_T=CC;
+	    if (Tface_conv[q]<TLL)  {KK_T= KK;CC_T= CC; }
+	    else {KK_T=KKS;CC_T=CCS; }
 	    R[i] += (1.0/RHO/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tamb)*fe_face_values.JxW(q);
 	    R[i] += (1.0/RHO/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
 	  

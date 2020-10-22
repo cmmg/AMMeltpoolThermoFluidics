@@ -37,15 +37,17 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 
-      if (ck>=0 && ck < 2) {
+      if (ck>=0 && ck < 3) {
 	for (unsigned int j=0; j<dim; j++) {
-	  vel_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
+	  if (j!=1) {vel_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];}
+	  else {vel_j[q][ck][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];}
 	}
       }
 
-      else if (ck==2) {
+      else if (ck==3) {
 	for (unsigned int j=0; j<dim; j++) {
-	  phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];
+	  if (j!=1) {phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];}
+	  else {phi_j[q][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];}
 	  
 	}	
       }
@@ -59,18 +61,15 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;        
     for (unsigned int q=0; q<n_q_points; ++q) {              
-      if (ck==2) {
+      if (ck==3) {
 	for (unsigned int j=0; j<dim; j++) {
-	  Rp[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);
+	  if (j!=1) {Rp[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);}
+	  else {Rp[i]+=-(GAMMA)*(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);}	  
 	}
-	//if kinetic pressure is used
-	Rp[i]+=-(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][0][0])*fe_values.JxW(q);
-        Rp[i]+=-(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][1][1])*fe_values.JxW(q);
-	
-	//if dynamic pressure is used
-	//Rp[i]+=-(RHO)*(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][0][0])*fe_values.JxW(q);
-        //Rp[i]+=-(RHO)*(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][1][1])*fe_values.JxW(q);
-
+	//
+	Rp[i]+=-(GAMMA/PRno)*(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][0][0])*fe_values.JxW(q);
+        Rp[i]+=-(GAMMA/PRno)*(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][1][1])*fe_values.JxW(q);
+	Rp[i]+=-(GAMMA/PRno)*(1.5/dt)*fe_values.shape_value_component(i, q, ck)*(vel_j[q][2][2])*fe_values.JxW(q);
 			
       }               
     }

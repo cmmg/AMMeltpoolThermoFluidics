@@ -28,8 +28,10 @@ namespace phaseField1
 	values(1)=0.0; //uy
 	values(2)=0.0; //uz
 	values(3)=0.0; //pressure
-	values(4)=353.0 ;//temp
-	values(5)=0.0; //liqfrac
+	
+	//Initial conditon for T
+	values(4)=(2.5e-04)*p[1]*(std::sin(3*3.1416*p[0]))*(std::sin(3*3.1416*p[2])); 
+
 	
     }
     
@@ -121,7 +123,7 @@ namespace phaseField1
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-    fe(FE_Q<dim>(2),3,FE_Q<dim>(1),1,FE_Q<dim>(2),2),
+    fe(FE_Q<dim>(2),3,FE_Q<dim>(1),1,FE_Q<dim>(2),1),
     dof_handler(triangulation),
     Pr_dof_handler(triangulation),
     T_dof_handler(triangulation),
@@ -139,8 +141,7 @@ namespace phaseField1
    
    nodal_solution_names.push_back("pressure"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
    nodal_solution_names.push_back("Temp"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-   nodal_solution_names.push_back("LiqFrac"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-
+ 
   }
   
   template <int dim>
@@ -164,10 +165,6 @@ namespace phaseField1
     //Setup boundary conditions
     std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true;uB[2]=true; 
     std::vector<bool> uBT (DIMS, false); uBT[1]=true; 
-    //std::vector<bool> uBL (DIMS, false); uBL[0]=true;    
-    // std::vector<bool> uBR (DIMS, false); uBR[0]=true;   
-    //std::vector<bool> uBT (DIMS, false); uBT[1]=true;    
-    //std::vector<bool> uBB (DIMS, false); uBB[1]=true;   
  
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
@@ -276,11 +273,6 @@ namespace phaseField1
     std::vector<bool> uBB (DIMS, false); uBB[4]=true;   
   
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
-    
-    //left
-    //VectorTools::interpolate_boundary_values (T_dof_handler, 0, ConstantFunction<dim>(9.7,DIMS), T_constraints,uBL);
-    //VectorTools::interpolate_boundary_values (T_dof_handler, 0, ZeroFunction<dim>(DIMS), T_constraintsZero,uBL);
-
     //bottom
     VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraints,uBB);
     VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraintsZero,uBB);
@@ -866,7 +858,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 
    
     solve_Pr();// for projection solve : solve based on converged U and not Un
-    L2_projection();
+    // L2_projection();
     update_pressure(); //update values of U and UGhost
     
     Unn=Un; UnnGhost=Unn; 
@@ -1085,8 +1077,8 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	    U(local_dof_indices[i])=T_update[i];	    
 	  }
 	  if (ci==5) {
-	    Liq_update[i]=T_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
-	    U(local_dof_indices[i])=Liq_update[i];	    
+	    //Liq_update[i]=T_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
+	    //U(local_dof_indices[i])=Liq_update[i];	    
 	  }
 	}
 	     	

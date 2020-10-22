@@ -1,29 +1,39 @@
 //problem geometry, mesh control
-#define DIMS 6 //2
+#define DIMS 5 //2
 #define FEOrder 2
 
-#define problemHeight 0.0015 //[1]
-#define problemWidth 0.002   //[2]
-#define problemLength 0.00625//[0]
+#define problemHeight 2.0 //[1]
+#define problemWidth 20.0   //[2]
+#define problemLength 20.0//[0]
 
 #define globalRefinementFactor 0
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.1
-#define TotalTime 75*TimeStep
+#define TimeStep 0.25 //0.01
+#define TotalTime 800*TimeStep
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 20 //60
-#define YSubRf 40 //15
-#define ZSubRf 40 //35
+#define XSubRf 70 //70
+#define YSubRf 8 //8
+#define ZSubRf 70 //70
 
+//Parameters for RBM
+#define PRno 880.0
+#define GAMMA 6.0
+#define RAno 30.0
+#define BIno 0.2
+#define MAno 92.0
+#define gravity 9.8
+#define Thot 0.135
+#define Tcold -0.115
+
+/*
 //Material parameters of ss316
-
 //viscosity
 #define mu 7.0e-03
 
@@ -81,9 +91,8 @@
 #define PP 275.0
 #define LAYER (0.254/1000.0)
 #define ABSORB 0.99
+*/
 
 
-//gravity
-#define gravity 9.8
 
 

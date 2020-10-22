@@ -54,9 +54,18 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	vel_conv[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 	vel_conv_conv[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];     	
 	for (unsigned int j=0; j<dim; j++) {
+	  if (j!=1) {
 	  vel_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
 	  vel_conv_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
 	  vel_conv_conv_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	  }
+
+	  else {
+	    vel_j[q][ck][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
+	    vel_conv_j[q][ck][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	    vel_conv_conv_j[q][ck][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
+	  }
+
 	}	
       }
       else if (ck==3) {
@@ -68,11 +77,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
       else if (ck==4) {
 	T_conv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConv[i];
      }
-    
-      else if (ck==5) {
-	liquid_conv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConv[i];
-      }
-                
+                   
     }
 
      for (unsigned int j=0; j<dim; j++) {
@@ -90,10 +95,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
    //Interpolate over faces
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
-    double CHECKL=cell->face(f)->center()[0];
-    double CHECKH=cell->face(f)->center()[1];
-    double CHECKW=cell->face(f)->center()[2];      
-    if(CHECKL ==0 ||CHECKL== problemLength||CHECKW ==0 ||CHECKW== problemWidth||CHECKH== problemHeight) {
+    double CHECKH=cell->face(f)->center()[1];   
+    if(CHECKH== problemHeight) {
       //if(cell->face(f)->center()[1] == problemHeight) {
       for (unsigned int q=0; q<n_q_points_face; ++q) {
 	LiqfaceConv[q]=0;
@@ -102,11 +105,10 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	  if (ck==4) {
 	    for (unsigned int j=0; j<dim ; ++j) {
-	      Tfaceconv_j[q][j]+=fe_face_values.shape_grad_component(i, q,ck)[j]*T_ULocalConv[i];
+	      if (j!=1) {Tfaceconv_j[q][j]+=fe_face_values.shape_grad_component(i, q,ck)[j]*T_ULocalConv[i];}
+	      else {Tfaceconv_j[q][j]+=(GAMMA)*fe_face_values.shape_grad_component(i, q,ck)[j]*T_ULocalConv[i];}	      
 	    }	    
-	  }
-	  else if (ck==5) { LiqfaceConv[q]+=fe_face_values.shape_value_component(i, q,ck)*T_ULocalConv[i];}
-	  
+	  }	  
 	}	
       }
     }    
@@ -120,61 +122,48 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
       if(ck>=0 && ck<3) {
 	
 	//Massterm
-	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
-	
-	//viscous term
-	if (liquid_conv[q]>0.05) {
-	  for (unsigned int j = 0; j < dim; j++){
-	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	  }
-	}
+	R[i]+=(1.0/PRno)*(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
 
-
-	else if (liquid_conv[q]<=0.05) {
-	  for (unsigned int j = 0; j < dim; j++){
-	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= ((1.0e+3)/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= ((1.0e+3)/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	  }
-	}
-	
-	 // pressure (kineitc)
-	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
-	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
-	R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
-
-	//pressure dynamic
-	//R[i]+=-(1.0/RHO)*(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
-	//R[i]+=-(1.0/RHO)*(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
-	//R[i]+=-(1.0/RHO)*(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
-
-
-	
-	//free convection
-	if (ck==1) R[i]+=-fe_values.shape_value_component(i, q, ck)*(gravity*BETA*(T_conv[q]-TSS))*fe_values.JxW(q);
-	
-	double AA,num;
-	//presure drop due to mush zone		
-	if (liquid_conv[q]>1) {num=1.0;}
-	else if(liquid_conv[q]<=1 && liquid_conv[q]>0) {num=liquid_conv[q];}
-	else {num=0.0;}
-	//AA=(5.0e+00)*(1/RHO)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q]))/(std::abs(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+1.0e-05); 
-	AA=(5.0e+00)*(1.0/RHO)*((1.0-num)*(1.0-num))/(std::abs(num*num*num)+1.0e-05); 	
-	R[i]+=fe_values.shape_value_component(i, q, ck)*((AA)*vel[q][ck])*fe_values.JxW(q);
-	
-	
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
-	  R[i]+=fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);
+	  if (j!=1) {R[i]+=(1.0/PRno)*fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);}
+	  else {R[i]+=(1.0/PRno)*(GAMMA)*fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);}
+
 	}
 	//second part
-	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);
-	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][1][1]*vel[q][ck])*fe_values.JxW(q);  	
+	R[i]+=(1.0/PRno)*0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);
+	R[i]+=(1.0/PRno)*0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][1][1]*vel[q][ck])*fe_values.JxW(q);  	
+	R[i]+=(1.0/PRno)*0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][2][2]*vel[q][ck])*fe_values.JxW(q); 
 
-	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][2][2]*vel[q][ck])*fe_values.JxW(q);  
+
+	//viscous term
+	  for (unsigned int j = 0; j < dim; j++){
+	    if (j!=1) {
+	      R[i]+= fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	      R[i]+= fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	    }
+	    else {
+	      R[i]+= (GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	      R[i]+= (GAMMA)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	    }
+	  }
+		
+	 // pressure (kineitc)
+	  if (ck!=1) {
+	    R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
+	    R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	    R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
+	  }
+	  else {
+	    R[i]+=-(GAMMA)*(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
+	    R[i]+=-(GAMMA)*(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	    R[i]+=-(GAMMA)*(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);	    
+	  }
+
+	//free convection
+	  if (ck==1) R[i]+=(std::pow(GAMMA,3)*RAno*(-gravity))*fe_values.shape_value_component(i, q, ck)*((T_conv[q]))*fe_values.JxW(q);
+		 
       }
                                         
     }
@@ -189,8 +178,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;	
 	  for (unsigned int q=0; q<n_q_points_face; ++q) {
-	    if ((ck==0 ||ck==2) && (LiqfaceConv[q]>0.0)) {  
-	      R[i] +=-(0.01)*(1.0/RHO)*fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);	  
+	    if (ck==0 ||ck==2 ) {  
+	      R[i] +=(1.0)*std::pow(GAMMA,2)*(MAno)*fe_face_values.shape_value_component(i, q, ck)*(Tfaceconv_j[q][ck])*fe_face_values.JxW(q);     
 	    }
 
 	}

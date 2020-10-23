@@ -2,25 +2,25 @@
 #define DIMS 5 //2
 #define FEOrder 2
 
-#define problemHeight 2.0 //[1]
-#define problemWidth 20.0   //[2]
-#define problemLength 20.0//[0]
+#define problemHeight 1.0 //[1]
+#define problemWidth 1.0   //[2]
+#define problemLength 1.0//[0]
 
 #define globalRefinementFactor 0
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.25 //0.01
-#define TotalTime 800*TimeStep
+#define TimeStep 0.01 //0.01
+#define TotalTime 100000*TimeStep
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 70 //70
-#define YSubRf 8 //8
-#define ZSubRf 70 //70
+#define XSubRf 20 //70
+#define YSubRf 2 //8
+#define ZSubRf 20 //70
 
 //Parameters for RBM
 #define PRno 880.0

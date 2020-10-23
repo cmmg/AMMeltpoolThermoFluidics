@@ -94,14 +94,12 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	//Mass term
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*T[q]-4.0*T_conv[q]+T_convconv[q])*fe_values.JxW(q);
 	
-	//double T_0_grad=-(1.0/problemHeight)*(BIno/(BIno+1))*(Thot-Tcold);
-	double T_0_grad=-(1.0/problemHeight)*(BIno/(BIno+1))*(0.9); ////0.5//1.0
 	//Advection term : temperature and phi
 	for (unsigned int j = 0; j < dim; j++){
 	  R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(T_j[q][j])*fe_values.JxW(q);
 	  
 	  if (j==1) {
-	    R[i] +=(GAMMA)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(T_0_grad)*fe_values.JxW(q);
+	    R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(-1.0)*fe_values.JxW(q);
 	  }
 	}
 	

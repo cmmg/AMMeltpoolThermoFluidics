@@ -127,9 +127,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
-	  if (j!=1) {R[i]+=(1.0/PRno)*fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);}
-	  else {R[i]+=(1.0/PRno)*(GAMMA)*fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);}
-
+	  R[i]+=(1.0/PRno)*fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);
 	}
 	//second part
 	R[i]+=(1.0/PRno)*0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);

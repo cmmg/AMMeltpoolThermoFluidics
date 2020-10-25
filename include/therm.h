@@ -99,7 +99,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	  R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(T_j[q][j])*fe_values.JxW(q);
 	  
 	  if (j==1) {
-	    R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(-1.0)*fe_values.JxW(q);
+	    R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(-GAMMA)*fe_values.JxW(q);	  
 	  }
 	}
 	

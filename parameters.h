@@ -11,15 +11,15 @@
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.01 //0.01
-#define TotalTime 100000*TimeStep
+#define TimeStep 0.00025 //0.01
+#define TotalTime 500*TimeStep
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
 #define XSubRf 20 //70
-#define YSubRf 2 //8
+#define YSubRf 20 //8
 #define ZSubRf 20 //70
 
 //Parameters for RBM

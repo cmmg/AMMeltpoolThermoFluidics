@@ -20,7 +20,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   const unsigned int faces_per_cell = GeometryInfo<dim>::faces_per_cell;
 
   dealii::Table<2,Sacado::Fad::DFad<double> > vel(n_q_points,dim);
-  dealii::Table<3,Sacado::Fad::DFad<double> > vel_j(n_q_points,dim,dim);
+  dealii::Table<3,Sacado::Fad::DFad<double> > vel_j(n_q_points,dim,dim), gamma_tense(n_q_points,dim,dim);
   dealii::Table<1,double> press_conv(n_q_points),phi_conv(n_q_points),phi_conv_conv(n_q_points);      
   dealii::Table<2,double> vel_conv(n_q_points,dim),vel_conv_conv(n_q_points,dim),vel_star(n_q_points,dim);
   dealii::Table<3,double> vel_conv_j(n_q_points,dim,dim),vel_conv_conv_j(n_q_points,dim,dim),vel_star_j(n_q_points,dim,dim);
@@ -37,6 +37,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	vel_star_j[q][j][k]=0;
 	vel_conv_j[q][j][k]=0;
 	vel_conv_conv_j[q][j][k]=0;
+	gamma_tense[q][j][k]=0;
       }      
     }
     
@@ -64,6 +65,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
        vel_star[q][j]=2.0*vel_conv[q][j]-vel_conv_conv[q][j];
        for (unsigned int k=0; k<dim; k++) {
 	vel_star_j[q][j][k]=2.0*vel_conv_j[q][j][k]-vel_conv_conv_j[q][j][k];
+	gamma_tense[q][j][k]=0.5*vel_j[q][j][k]+0.5*vel_j[q][k][j];
       }      
     }
           
@@ -79,7 +81,10 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 
        //Laplace term and pressure
 	for (unsigned int j = 0; j < dim; j++){
-	  R[i]+=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);		 	  
+	  R[i]+=(nu)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);		 	 
+	  //R[i]+= (nu)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	  //R[i]+= (nu)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+ 
 	}
 	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
 	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
@@ -89,11 +94,11 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
-	  R[i]+=fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);
+	  //  R[i]+=fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);
 	}
 	//second part
-	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);
-	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][1][1]*vel[q][ck])*fe_values.JxW(q);  	
+	//R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);
+	//R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][1][1]*vel[q][ck])*fe_values.JxW(q);  	
       }
           
                                  

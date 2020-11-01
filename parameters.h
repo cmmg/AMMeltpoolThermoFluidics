@@ -12,7 +12,7 @@
 
 //time step controls
 #define TimeStep 1.0e-3
-#define TotalTime 20000*TimeStep
+#define TotalTime 1003*TimeStep
 
 //output controls
 #define outputFileName "solution"
@@ -23,7 +23,7 @@
 #define ZSubRf 1
 
 //Kinematic viscosity
-#define nu 1.0/100.0
+#define nu 0.01
 
 
 

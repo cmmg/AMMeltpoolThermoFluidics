@@ -73,6 +73,7 @@ namespace phaseField1
     IndexSet                                  Pr_locally_relevant_dofs;
     DoFHandler<dim>                           Pr_dof_handler;
     ConstraintMatrix                          Pr_constraints, Pr_constraintsZero;
+    AffineConstraints<double>                 Pr_mean_value_constraints;
     LA::MPI::SparseMatrix                     Pr_system_matrix;
     LA::MPI::Vector                           Pr_locally_relevant_solution,Pr_U, Pr_Un, Pr_UGhost, Pr_UnGhost, Pr_dU;
     LA::MPI::Vector                           Pr_system_rhs;
@@ -174,33 +175,25 @@ namespace phaseField1
     //FEValuesExtractors::Vector velocities(0);
     FEValuesExtractors::Scalar pressure(dim);
     
-    //typename DoFHandler<dim>::active_cell_iterator
-      //cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
-    
-    //std::vector<bool> boundary_dofs(Pr_dof_handler.n_dofs(), false);
+    typename DoFHandler<dim>::active_cell_iterator
+      cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
 
+    IndexSet boundary_dofs;
+    
     //constraints first dof of pressure to zero
-    //DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
-    //boundary_dofs);
+    DoFTools::extract_boundary_dofs(Pr_dof_handler, fe.component_mask(pressure),
+				    boundary_dofs);
+
+    const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
+							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
+
+    Pr_mean_value_constraints.clear();
+    Pr_mean_value_constraints.add_line(first_boundary_dof);
     
-    //const unsigned int first_boundary_dof = std::distance(boundary_dofs.begin(),
-    //							  std::find (boundary_dofs.begin(), boundary_dofs.end(), true));
-    
-    // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
-
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 0, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 1, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 2, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraints,uBC);
-    VectorTools::interpolate_boundary_values (Pr_dof_handler, 3, ZeroFunction<dim>(DIMS) , Pr_constraintsZero,uBC);       
-
-    //Pr_constraints.add_line(first_boundary_dof);
+    for (unsigned int i = first_boundary_dof + 1; i < Pr_dof_handler.n_dofs(); ++i)
+      if (boundary_dofs.is_element(i) == true)
+	Pr_mean_value_constraints.add_entry(first_boundary_dof, i, -1);
+    Pr_mean_value_constraints.close();
     Pr_constraints.close ();
     Pr_constraintsZero.close ();
     L2_constraints.close ();
@@ -283,6 +276,9 @@ namespace phaseField1
     
     DynamicSparsityPattern Pr_dsp (Pr_locally_relevant_dofs);
     DoFTools::make_sparsity_pattern (Pr_dof_handler, Pr_dsp, Pr_constraints, false);
+
+    Pr_mean_value_constraints.condense(Pr_dsp);
+
     SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, Pr_locally_relevant_dofs);
     Pr_system_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
     L2_Mass_matrix.reinit (Pr_locally_owned_dofs, Pr_locally_owned_dofs, Pr_dsp, mpi_communicator);
@@ -823,7 +819,7 @@ namespace phaseField1
       //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
       solve(); //for diffuse solve       
       int NSTEP=(currentTime/dt);
-      if (NSTEP%250==0) output_results(currentIncrement);      
+      if (NSTEP%1==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

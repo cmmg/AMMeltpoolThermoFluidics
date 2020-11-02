@@ -49,32 +49,23 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;      
-      if (ck>=0 && ck<3) {
+      if (ck>=0 && ck<2) {
 	vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
 	vel_conv[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 	vel_conv_conv[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConvConv[i];     	
-	for (unsigned int j=0; j<dim; j++) {
-	  if (j!=1) {
+	for (unsigned int j=0; j<dim; j++) {	 
 	  vel_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
 	  vel_conv_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
-	  vel_conv_conv_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
-	  }
-
-	  else {
-	    vel_j[q][ck][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
-	    vel_conv_j[q][ck][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
-	    vel_conv_conv_j[q][ck][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];
-	  }
-
+	  vel_conv_conv_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocalConv[i];	  	  
 	}	
       }
-      else if (ck==3) {
+      else if (ck==2) {
 	press_conv[q]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
 	phi_conv[q]+=fe_values.shape_value_component(i, q, ck)*Pr_ULocalConv[i];
 	phi_conv_conv[q]+=fe_values.shape_value_component(i, q, ck)*Pr_ULocalConvConv[i];	
       }
       
-      else if (ck==4) {
+      else if (ck==3) {
 	T_conv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConv[i];
      }
                    
@@ -103,10 +94,9 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	for (unsigned int j=0; j<dim ; ++j) { Tfaceconv_j[q][j]=0; }
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-	  if (ck==4) {
+	  if (ck==3) {
 	    for (unsigned int j=0; j<dim ; ++j) {
-	      if (j!=1) {Tfaceconv_j[q][j]+=fe_face_values.shape_grad_component(i, q,ck)[j]*T_ULocalConv[i];}
-	      else {Tfaceconv_j[q][j]+=(GAMMA)*fe_face_values.shape_grad_component(i, q,ck)[j]*T_ULocalConv[i];}	      
+	      Tfaceconv_j[q][j]+=fe_face_values.shape_grad_component(i, q,ck)[j]*T_ULocalConv[i];
 	    }	    
 	  }	  
 	}	
@@ -119,48 +109,38 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;         
     for (unsigned int q=0; q<n_q_points; ++q) {        
-      if(ck>=0 && ck<3) {
+      if(ck>=0 && ck<2) {
 	
 	//Massterm
-	R[i]+=(1.0/PRno)*(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
+	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
 
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
-	  R[i]+=(1.0/PRno)*fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);
+	  R[i]+=fe_values.shape_value_component(i, q, ck)*(vel_star[q][j]*vel_j[q][ck][j])*fe_values.JxW(q);
 	}
 	//second part
-	R[i]+=(1.0/PRno)*0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);
-	R[i]+=(1.0/PRno)*0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][1][1]*vel[q][ck])*fe_values.JxW(q);  	
-	R[i]+=(1.0/PRno)*0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][2][2]*vel[q][ck])*fe_values.JxW(q); 
+	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][0][0]*vel[q][ck])*fe_values.JxW(q);
+	R[i]+=0.5*fe_values.shape_value_component(i, q, ck)*(vel_star_j[q][1][1]*vel[q][ck])*fe_values.JxW(q);  	
+
 
 
 	//viscous term
-	  for (unsigned int j = 0; j < dim; j++){
-	    if (j!=1) {
-	      R[i]+= fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	      R[i]+= fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    }
-	    else {
-	      R[i]+= (GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	      R[i]+= (GAMMA)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    }
-	  }
-		
+	for (unsigned int j = 0; j < dim; j++){	  
+	  //R[i]+= PRno*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	  //R[i]+= PRno*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	  R[i]+= PRno*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
+	}
+	  
 	 // pressure (kineitc)
-	  if (ck!=1) {
-	    R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
-	    R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
-	    R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
-	  }
-	  else {
-	    R[i]+=-(GAMMA)*(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
-	    R[i]+=-(GAMMA)*(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
-	    R[i]+=-(GAMMA)*(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);	    
-	  }
-
+	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
+	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
+      
 	//free convection
-	  if (ck==1) R[i]+=(std::pow(GAMMA,3)*RAno*(-gravity))*fe_values.shape_value_component(i, q, ck)*((T_conv[q]))*fe_values.JxW(q);
+	if (ck==1) {
+	  R[i]+=-PRno*RAno*fe_values.shape_value_component(i, q, ck)*(T_conv[q])*fe_values.JxW(q);
+	}
 		 
       }
                                         
@@ -176,8 +156,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;	
 	  for (unsigned int q=0; q<n_q_points_face; ++q) {
-	    if (ck==0 ||ck==2 ) {  
-	      R[i] +=(1.0)*std::pow(GAMMA,2)*(MAno)*fe_face_values.shape_value_component(i, q, ck)*(Tfaceconv_j[q][ck])*fe_face_values.JxW(q);     
+	    if (ck==0 ||ck==1 ) {  
+	      //R[i] +=(1.0)*std::pow(GAMMA,2)*(MAno)*fe_face_values.shape_value_component(i, q, ck)*(Tfaceconv_j[q][ck])*fe_face_values.JxW(q);     
 	    }
 
 	}

@@ -26,13 +26,9 @@ namespace phaseField1
         Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     	
 	values(0)=0.0;  //ux
 	values(1)=0.0; //uy
-	values(2)=0.0; //uz
-	values(3)=0.0; //pressure
-	
+	values(2)=0.0; //pressure	
 	//Initial conditon for T
-	values(4)=(2.5e-04)*p[1]*(std::sin(3*3.1416*p[0]))*(std::sin(3*3.1416*p[2])); 
-
-	
+	values(3)=0.0; 	
     }
     
   };
@@ -123,7 +119,7 @@ namespace phaseField1
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-    fe(FE_Q<dim>(2),3,FE_Q<dim>(1),1,FE_Q<dim>(2),1),
+    fe(FE_Q<dim>(2),2,FE_Q<dim>(1),1,FE_Q<dim>(2),1),
     dof_handler(triangulation),
     Pr_dof_handler(triangulation),
     T_dof_handler(triangulation),
@@ -163,8 +159,8 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true;uB[2]=true; 
-    std::vector<bool> uBT (DIMS, false); uBT[1]=true; 
+    std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true; 
+    std::vector<bool> uBT (DIMS, false); uBT[0]=true; uBT[1]=true; 
  
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
@@ -182,19 +178,7 @@ namespace phaseField1
 
     //top
     VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBT);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBT);
-
-
-    //front
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraints,uB);
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
-
-
-    //back
-    VectorTools::interpolate_boundary_values (dof_handler, 5, ZeroFunction<dim>(DIMS) , constraints,uB);
-    VectorTools::interpolate_boundary_values (dof_handler, 5, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
-    
-    
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBT);    
     
     constraints.close ();
     constraintsZero.close ();
@@ -211,9 +195,9 @@ namespace phaseField1
     DoFTools::make_hanging_node_constraints (Pr_dof_handler, Pr_constraintsZero);
     
     //Setup boundary conditions
-    std::vector<bool> uBC (DIMS, false);  uBC[3]=true;
+    std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
 
-    FEValuesExtractors::Scalar pressure(dim);
+    FEValuesExtractors::Scalar pressure(2); //dim is 2
 
     typename DoFHandler<dim>::active_cell_iterator
       cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
@@ -270,12 +254,16 @@ namespace phaseField1
    
     //Setup boundary conditions
     //std::vector<bool> uBL (DIMS, false); uBL[3]=true;    
-    std::vector<bool> uBB (DIMS, false); uBB[4]=true;   
+    std::vector<bool> uBB (DIMS, false); uBB[3]=true;   
   
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
-    //bottom
-    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraints,uBB);
-    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraintsZero,uBB);
+    //right cold  wall
+    VectorTools::interpolate_boundary_values (T_dof_handler, 1, ZeroFunction<dim>(DIMS), T_constraints,uBB);
+    VectorTools::interpolate_boundary_values (T_dof_handler, 1, ZeroFunction<dim>(DIMS), T_constraintsZero,uBB);
+    
+    //left hot wall
+    VectorTools::interpolate_boundary_values (T_dof_handler, 0, ConstantFunction<dim>(1.0,DIMS), T_constraints,uBB);
+    VectorTools::interpolate_boundary_values (T_dof_handler, 0, ZeroFunction<dim>(DIMS) , T_constraintsZero,uBB);
 
     T_constraints.close ();
     T_constraintsZero.close ();
@@ -742,8 +730,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     
 	Pr_locally_relevant_solution = completely_distributed_solution;
 	Pr_dU=completely_distributed_solution;
-      
-              
+                    
   }   
 
   
@@ -970,7 +957,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	     for (unsigned int i=0; i<dofs_per_cell ; ++i) {
 	       //RHS
 	       unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;
-	       if(ci==dim) {
+	       if(ci==2) {
 		 for(unsigned int d=0; d<dim ; ++d) {
 		   local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadGradU[q][d][d])*fe_values.JxW(q);		   
 		 }
@@ -980,7 +967,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	       
 	       for (unsigned int j=0; j<dofs_per_cell ; ++j) {
 		 unsigned int cj = fe_values.get_fe().system_to_component_index(j).first - 0;
-		 if(ci==cj && ci==dim) { 
+		 if(ci==cj && ci==2) { 
 		   local_matrix[i][j]+=fe_values.shape_value_component(i, q,dim)*fe_values.shape_value_component(j, q,dim)*fe_values.JxW(q);	    }
 	       }
 	     }
@@ -1025,7 +1012,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	  press_update[i]=0;
 	  const unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;	   
 	  //note value of pressue L2_ UGhost	  
-	  if (ci==dim) {
+	  if (ci==2) {
 	    press_update[i]=Pr_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
 	    press_update[i]+=UnGhost(local_dof_indices[i]); //press_k is noted and added to phi_k+1
 	    //    press_update[i]+=-(nu)*L2_UGhost(local_dof_indices[i]); //nu. div.v
@@ -1072,7 +1059,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	  T_update[i]=0;Liq_update[i]=0;
 	  const unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;	   
 	  //note value of pressue L2_ UGhost	  
-	  if (ci==4) {
+	  if (ci==3) {
 	    T_update[i]=T_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
 	    U(local_dof_indices[i])=T_update[i];	    
 	  }
@@ -1151,9 +1138,9 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     std::vector<unsigned int> numRepetitions;
     numRepetitions.push_back(XSubRf); // x refinement
     numRepetitions.push_back(YSubRf); // y refinement
-    numRepetitions.push_back(ZSubRf); // z refinement
-    Point<dim> p1 (0,0,0);
-    Point<dim> p2 (problemLength,problemHeight,problemWidth);
+    //numRepetitions.push_back(ZSubRf); // z refinement
+    Point<dim> p1 (0,0);
+    Point<dim> p2 (problemLength,problemHeight);
     GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
    
 
@@ -1180,14 +1167,16 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     currentIncrement=0;
     for (currentTime=2*dt; currentTime<totalTime; currentTime+=dt){
       currentIncrement++;
-      pcout << std::endl;    
+      pcout << std::endl;         
       
-      solve(); //for diffuse solve             
-      //solve_temp();
-      //update_TintoU();
-      //Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
+      if (currentTime>4*dt) {solve();} //for diffuse solve                  
+      else {
+      solve_temp();
+      update_TintoU();
+      Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
+      }
       int NSTEP=(currentTime/dt);
-      if (NSTEP%1==0) output_results(currentIncrement);      
+      if (NSTEP%200==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }
@@ -1202,7 +1191,7 @@ int main(int argc, char *argv[]){
       using namespace dealii;
       using namespace phaseField1;
       Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
-      phaseField<3> problem;
+      phaseField<2> problem;
       problem.run ();
     }
   catch (std::exception &exc)

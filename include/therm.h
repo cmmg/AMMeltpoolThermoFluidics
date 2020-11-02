@@ -37,18 +37,15 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     for (unsigned int j=0; j<dim; j++) {T_j[q][j]=0.0; liquid_j[q][j]=0.0; vel[q][j]=0.0; }
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;     
-       if (ck>=0 && ck< 3) { 
+       if (ck>=0 && ck< 2) { 
 	 vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
       }
            
-       else if (ck==4) { 
+       else if (ck==3) { 
 	T[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocal[i]; T_conv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConv[i];
 	T_convconv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConvConv[i];
 	for (unsigned int j=0; j<dim; j++) {
-	  if(j!=1) {T_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*T_ULocal[i];	}
-	  else {T_j[q][j]+=(GAMMA)*fe_values.shape_grad_component(i, q, ck)[j]*T_ULocal[i];}
-	  
-	  
+	  T_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*T_ULocal[i];		 	 	  
 	}
       }
       else if (ck==5) {
@@ -72,7 +69,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	Tface[q]=0.0; Tface_conv[q]=0.0;   
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-	  if (ck==4) {
+	  if (ck==3) {
 	    Tface[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocal[i]; 
 	    Tface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i]; 
 	  }
@@ -90,23 +87,18 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
       //get quadrature points
       Point<dim> quadPoint=fe_values.quadrature_point(q);   
       
-      if (ck==4) {			
+      if (ck==3) {			
 	//Mass term
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*T[q]-4.0*T_conv[q]+T_convconv[q])*fe_values.JxW(q);
 	
 	//Advection term : temperature and phi
-	for (unsigned int j = 0; j < dim; j++){
-	  R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(T_j[q][j])*fe_values.JxW(q);
-	  
-	  if (j==1) {
-	    R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(-GAMMA)*fe_values.JxW(q);	  
-	  }
+	for (unsigned int j = 0; j < dim; j++) {
+	  R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(T_j[q][j])*fe_values.JxW(q);	  
 	}
 	
 	//diffusion terms	
 	for (unsigned int j = 0; j < dim; j++){	
-	  if (j!=1) {R[i] +=fe_values.shape_grad_component(i, q,ck)[j]*T_j[q][j]*fe_values.JxW(q);}
-	  else {R[i] +=(GAMMA)*fe_values.shape_grad_component(i, q,ck)[j]*T_j[q][j]*fe_values.JxW(q);}	  
+	  R[i] +=fe_values.shape_grad_component(i, q,ck)[j]*T_j[q][j]*fe_values.JxW(q);
 	}	
       }
       
@@ -125,8 +117,8 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
       for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;	
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
-	  if (ck==4) {    
-	    R[i] += (GAMMA*GAMMA*BIno)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q])*fe_face_values.JxW(q);		  
+	  if (ck==3) {    
+	    //R[i] += (GAMMA*GAMMA*BIno)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q])*fe_face_values.JxW(q);		  
 	  }
 	}
       }

@@ -38,7 +38,8 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;     
        if (ck>=0 && ck< 2) { 
-	 vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	 //vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+	 vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocal[i];
       }
            
        else if (ck==3) { 

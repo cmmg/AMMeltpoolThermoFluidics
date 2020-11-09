@@ -1,8 +1,8 @@
 #!/bin/sh
 #This file is called submit-script.sh
-#SBATCH --partition=int # default "univ", if not specified
-#SBATCH --time=0-00:29:00 # run time in days-hh:mm:ss
-#SBATCH --nodes=1# require 2 nodes
+#SBATCH --partition=pre # default "univ", if not specified
+#SBATCH --time=0-23:00:00 # run time in days-hh:mm:ss
+#SBATCH --nodes=2# require 2 nodes
 #SBATCH --ntasks-per-node=16            # (by default, "ntasks"="cpus")
 #SBATCH --mem-per-cpu=4000# RAM per CPU core, in MB (default 4 GB/core)
 #SBATCH --job-name="cmake"

@@ -1247,11 +1247,12 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       else {
       solve_temp();
       update_TintoU();
+      Unn=Un; UnnGhost=Unn; // copy updated values in Un and UnGhost;
       Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
       } 
 
       int NSTEP=(currentTime/dt);
-      if (NSTEP%1==0) output_results(currentIncrement);      
+      if (NSTEP%250==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

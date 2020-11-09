@@ -11,8 +11,8 @@
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.01 //0.01
-#define TotalTime 1004*TimeStep
+#define TimeStep 0.0009 //0.01
+#define TotalTime 1000004*TimeStep
 #define TOLERANCE 1.0e-08
 
 //output controls
@@ -24,7 +24,7 @@
 #define ZSubRf 1 //70
 
 //Parameters for RBM
-#define PRno 0.71
+#define PRno 0.0128
 //#define GAMMA 6.0
 #define RAno 10000.0
 #define intT 0.05

@@ -133,13 +133,13 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	}
 	  
 	 // pressure (kineitc)
-	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
-	R[i]+=-(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
-	R[i]+=-(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
+	R[i]+=-(1.0)*(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
+	R[i]+=-(1.0)*(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
+	R[i]+=-(1.0)*(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
       
 	//free convection
 	if (ck==1) {
-	  R[i]+=-PRno*RAno*fe_values.shape_value_component(i, q, ck)*(T_conv[q])*fe_values.JxW(q);
+	  R[i]+=-PRno*PRno*GRno*fe_values.shape_value_component(i, q, ck)*(T_conv[q])*fe_values.JxW(q);
 	}
 		 
       }
@@ -156,8 +156,8 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;	
 	  for (unsigned int q=0; q<n_q_points_face; ++q) {
-	    if (ck==0 ||ck==1 ) {  
-	      //R[i] +=(1.0)*std::pow(GAMMA,2)*(MAno)*fe_face_values.shape_value_component(i, q, ck)*(Tfaceconv_j[q][ck])*fe_face_values.JxW(q);     
+	    if (ck==0) {  
+	      R[i] +=(-1.0)*(PRno*MAno)*fe_face_values.shape_value_component(i, q, ck)*(Tfaceconv_j[q][ck])*fe_face_values.JxW(q);     
 	    }
 
 	}

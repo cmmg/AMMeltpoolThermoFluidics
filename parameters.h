@@ -11,23 +11,26 @@
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.0009 //0.01
-#define TotalTime 1000004*TimeStep
+#define TimeStep 1.0e-04 //0.01
+#define TotalTime 10004*TimeStep
 #define TOLERANCE 1.0e-08
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 80 //70
-#define YSubRf 80 //8
+#define XSubRf 50 //70
+#define YSubRf 50 //8
 #define ZSubRf 1 //70
 
 //Parameters for RBM
-#define PRno 0.0128
+#define PRno 0.054
 //#define GAMMA 6.0
-#define RAno 10000.0
+#define GRno 2.0e+06
+//#define RAno 10000.0
 #define intT 0.05
+#define MAno 1000.0
+
 //#define BIno 0.2
 //#define MAno 92.0
 //#define gravity 9.8

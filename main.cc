@@ -163,7 +163,7 @@ namespace phaseField1
    
     //Setup boundary conditions
     std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true; 
-    std::vector<bool> uBT (DIMS, false); uBT[0]=true; uBT[1]=true; 
+    std::vector<bool> uBT (DIMS, false); uBT[1]=true; 
  
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
@@ -1252,7 +1252,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       } 
 
       int NSTEP=(currentTime/dt);
-      if (NSTEP%250==0) output_results(currentIncrement);      
+      if (NSTEP%50==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

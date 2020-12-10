@@ -123,22 +123,15 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
 	
 	//viscous term
-	if (liquid_conv[q]>0.05) {
+
 	  for (unsigned int j = 0; j < dim; j++){
-	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	  }
-	}
+	    R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
+	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	   }
 
 
-	else if (liquid_conv[q]<=0.05) {
-	  for (unsigned int j = 0; j < dim; j++){
-	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= ((1.0e+3)/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    R[i]+= ((1.0e+3)/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	  }
-	}
+
 	
 	 // pressure (kineitc)
 	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
@@ -150,7 +143,6 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	//R[i]+=-(1.0/RHO)*(4.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv[q])*fe_values.JxW(q);
 	//R[i]+=-(1.0/RHO)*(-1.0/3.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(phi_conv_conv[q])*fe_values.JxW(q);
 
-
 	
 	//free convection
 	if (ck==1) R[i]+=-fe_values.shape_value_component(i, q, ck)*(gravity*BETA*(T_conv[q]-TSS))*fe_values.JxW(q);
@@ -161,7 +153,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	else if(liquid_conv[q]<=1 && liquid_conv[q]>0) {num=liquid_conv[q];}
 	else {num=0.0;}
 	//AA=(1.0e+03)*((1.0-lquid_conv[q])*(1.0-liquid_conv[q]))/(std::abs(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+1.0e-05); 	
-	AA=(5.0e+00)*(1.0/RHO)*((1.0-num)*(1.0-num))/(std::abs(num*num*num)+1.0e-05); 	
+	AA=(5.0e+00)*(1.0)*((1.0-num)*(1.0-num))/(std::abs(num*num*num)+1.0e-05); 	
 	R[i]+=fe_values.shape_value_component(i, q, ck)*((AA)*vel[q][ck])*fe_values.JxW(q);
 	
 	
@@ -192,7 +184,7 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	
 	  for (unsigned int q=0; q<n_q_points_face; ++q) {
 	    if (ck==0 /*&& LiqfaceConv[q]>0.05*/ ) {  
-	     R[i] +=-(0.01)*(1.0/RHO)*fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);  
+	     R[i] +=-(1.0/RHO)*fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);  
 	    }
 	    	
 

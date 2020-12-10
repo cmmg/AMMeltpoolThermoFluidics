@@ -26,10 +26,11 @@ namespace phaseField1
         Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     	
 	values(0)=0.0;  //ux
 	values(1)=0.0; //uy
-	values(2)=0.0; //pressure
-	values(3)=353.0 ;//temp
-	values(4)=0.0; //liqfrac
-	
+	values(2)=0.0; //pressure	
+
+	//Initial conditon for T and LiquidFR
+	values(3)=353.0;
+	values(4)=0.0;
     }
     
   };
@@ -60,6 +61,7 @@ namespace phaseField1
     LA::MPI::SparseMatrix                     system_matrix;
     LA::MPI::Vector                           locally_relevant_solution, U, Un, UGhost, UnGhost, dU;
     LA::MPI::Vector                           Unn, UnnGhost;     
+    LA::MPI::Vector                           UItm, UItmold, UItmGhost, DIFFU;     
     LA::MPI::Vector                           system_rhs;
     ConditionalOStream                        pcout;
     TimerOutput                               computing_timer;
@@ -83,6 +85,7 @@ namespace phaseField1
     LA::MPI::Vector                           Pr_locally_relevant_solution,Pr_U, Pr_Un, Pr_UGhost, Pr_UnGhost, Pr_dU;
     LA::MPI::Vector                           Pr_system_rhs;
     LA::MPI::Vector                           Pr_UnnGhost, Pr_Unn;
+    LA::MPI::Vector                           Pr_UItmGhost, Pr_UItm, Pr_UItmold;
 
     ConstraintMatrix                          L2_constraints;
     LA::MPI::SparseMatrix                     L2_Mass_matrix;
@@ -96,7 +99,8 @@ namespace phaseField1
     ConstraintMatrix                          T_constraints, T_constraintsZero;
     LA::MPI::SparseMatrix                     T_system_matrix;
     LA::MPI::Vector                           T_locally_relevant_solution, T_U, T_Un, T_UGhost, T_UnGhost, T_dU;
-    LA::MPI::Vector                           T_Unn, T_UnnGhost;     
+    LA::MPI::Vector                           T_Unn, T_UnnGhost;
+    LA::MPI::Vector                           T_UItm,T_UItmold, T_UItmGhost, DIFFT;
     LA::MPI::Vector                           T_system_rhs;
    
     
@@ -138,8 +142,9 @@ namespace phaseField1
    
    nodal_solution_names.push_back("pressure"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
    nodal_solution_names.push_back("Temp"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-   nodal_solution_names.push_back("LiqFrac"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-
+   nodal_solution_names.push_back("Liquid"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
+      
+ 
   }
   
   template <int dim>
@@ -161,12 +166,8 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true;
-    std::vector<bool> uBT (DIMS, false); uBT[1]=true;
-    //std::vector<bool> uBL (DIMS, false); uBL[0]=true;    
-    // std::vector<bool> uBR (DIMS, false); uBR[0]=true;   
-    //std::vector<bool> uBT (DIMS, false); uBT[1]=true;    
-    //std::vector<bool> uBB (DIMS, false); uBB[1]=true;   
+    std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true; 
+    std::vector<bool> uBT (DIMS, false); uBT[1]=true; 
  
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
@@ -184,9 +185,7 @@ namespace phaseField1
 
     //top
     VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraints,uBT);
-    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBT);
-
-
+    VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBT);    
     
     constraints.close ();
     constraintsZero.close ();
@@ -205,7 +204,7 @@ namespace phaseField1
     //Setup boundary conditions
     std::vector<bool> uBC (DIMS, false);  uBC[2]=true;
 
-    FEValuesExtractors::Scalar pressure(dim);
+    FEValuesExtractors::Scalar pressure(2); //dim is 2
 
     typename DoFHandler<dim>::active_cell_iterator
       cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
@@ -266,13 +265,9 @@ namespace phaseField1
   
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
-    //left
-    //VectorTools::interpolate_boundary_values (T_dof_handler, 0, ConstantFunction<dim>(9.7,DIMS), T_constraints,uBL);
-    //VectorTools::interpolate_boundary_values (T_dof_handler, 0, ZeroFunction<dim>(DIMS), T_constraintsZero,uBL);
-
-    //bottom
-    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraints,uBB);
-    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS) , T_constraintsZero,uBB);
+    //left hot wall
+    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS), T_constraints,uBB);
+    VectorTools::interpolate_boundary_values (T_dof_handler, 2, ZeroFunction<dim>(DIMS), T_constraintsZero,uBB);
 
     T_constraints.close ();
     T_constraintsZero.close ();
@@ -297,12 +292,16 @@ namespace phaseField1
     Un.reinit (locally_owned_dofs, mpi_communicator);
     dU.reinit (locally_owned_dofs, mpi_communicator);    
     Unn.reinit (locally_owned_dofs, mpi_communicator);
-    //Unnn.reinit (locally_owned_dofs, mpi_communicator);
-
+    
+    UItm.reinit (locally_owned_dofs, mpi_communicator);
+    UItmold.reinit (locally_owned_dofs, mpi_communicator);
+    DIFFU.reinit(T_locally_owned_dofs, mpi_communicator);
     //Ghost vectors
     UGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     UnnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+    
+    UItmGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions(0);
@@ -342,6 +341,10 @@ namespace phaseField1
     Pr_dU.reinit (Pr_locally_owned_dofs, mpi_communicator);
     Pr_Unn.reinit (Pr_locally_owned_dofs, mpi_communicator);
 
+
+    Pr_UItm.reinit (Pr_locally_owned_dofs, mpi_communicator);
+    Pr_UItmold.reinit (Pr_locally_owned_dofs, mpi_communicator);
+
     L2_U.reinit (Pr_locally_owned_dofs, mpi_communicator);
     L2_system_rhs.reinit (Pr_locally_owned_dofs, mpi_communicator);
     
@@ -349,6 +352,8 @@ namespace phaseField1
     Pr_UGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
     Pr_UnGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
     Pr_UnnGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
+
+    Pr_UItmGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
 
     L2_UGhost.reinit (Pr_locally_owned_dofs, Pr_locally_relevant_dofs, mpi_communicator);
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
@@ -387,12 +392,18 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     T_Un.reinit (T_locally_owned_dofs, mpi_communicator);
     T_dU.reinit (T_locally_owned_dofs, mpi_communicator);    
     T_Unn.reinit (T_locally_owned_dofs, mpi_communicator);
-   
+
+    T_UItm.reinit (T_locally_owned_dofs, mpi_communicator);
+    T_UItmold.reinit (T_locally_owned_dofs, mpi_communicator);
+    DIFFT.reinit(T_locally_owned_dofs, mpi_communicator);
+
     //Ghost vectors
     T_UGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
     T_UnGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
     T_UnnGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
     
+    T_UItmGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
+
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions_temp(0);
     
@@ -448,17 +459,28 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	
 	for (unsigned int i=0; i<dofs_per_cell; ++i){
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - 0;
-	  if (std::abs(UGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
-	  else{ULocal[i]=UGhost(local_dof_indices[i]);}
+
+	  //if (std::abs(UGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
+	  //else{ULocal[i]=UGhost(local_dof_indices[i]);}
+	  //ULocal[i].diff (i, dofs_per_cell);
+	  
+	  if (std::abs(UItmGhost(local_dof_indices[i]))<1.0e-16){ULocal[i]=0.0;}
+	  else{ULocal[i]=UItmGhost(local_dof_indices[i]);}
 	  ULocal[i].diff (i, dofs_per_cell);
+	  
 	  ULocalConv[i]= UnGhost(local_dof_indices[i]);	 
 	  ULocalConvConv[i]= UnnGhost(local_dof_indices[i]);
 
 	  Pr_ULocalConv[i]= Pr_UnGhost(local_dof_indices[i]);	 
 	  Pr_ULocalConvConv[i]= Pr_UnnGhost(local_dof_indices[i]);
 
-	  T_ULocalConv[i]= T_UnGhost(local_dof_indices[i]);	 
+	  //T_ULocalConv[i]= T_UnGhost(local_dof_indices[i]);	 
+	  //T_ULocalConvConv[i]= T_UnnGhost(local_dof_indices[i]);
+	  
+	  //use T_conv from T intermediate
+	  T_ULocalConv[i]= T_UItmGhost(local_dof_indices[i]);	 
 	  T_ULocalConvConv[i]= T_UnnGhost(local_dof_indices[i]);
+
 	}
 
 	//setup residual vector
@@ -523,8 +545,13 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	
 	for (unsigned int i=0; i<dofs_per_cell; ++i){
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - 0;
+	  
 	  if (std::abs(Pr_UGhost(local_dof_indices[i]))<1.0e-16){Pr_ULocal[i]=0.0;}	  
 	  else{Pr_ULocal[i]=Pr_UGhost(local_dof_indices[i]);}
+	  
+	  //if (std::abs(Pr_UItmGhost(local_dof_indices[i]))<1.0e-16){Pr_ULocal[i]=0.0;}	  
+	  //else{Pr_ULocal[i]=Pr_UItmGhost(local_dof_indices[i]);}
+
 	  Pr_ULocal[i].diff (i, dofs_per_cell);
 	  Pr_ULocalConv[i]= Pr_UnGhost(local_dof_indices[i]);
 	  //here UGhost has converged values from diffusion step
@@ -607,14 +634,21 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 
 	for (unsigned int i=0; i<dofs_per_cell; ++i){
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - 0;
-	  if (std::abs(T_UGhost(local_dof_indices[i]))<1.0e-16){T_ULocal[i]=0.0;}
-	  else{T_ULocal[i]=T_UGhost(local_dof_indices[i]);}
+
+	  //  if (std::abs(T_UGhost(local_dof_indices[i]))<1.0e-16){T_ULocal[i]=0.0;}
+	  //else{T_ULocal[i]=T_UGhost(local_dof_indices[i]);}
+
+	  if (std::abs(T_UItmGhost(local_dof_indices[i]))<1.0e-16){T_ULocal[i]=0.0;}
+	  else{T_ULocal[i]=T_UItmGhost(local_dof_indices[i]);}
+		  
+
 	  T_ULocal[i].diff (i, dofs_per_cell);
 	  T_ULocalConv[i]= T_UnGhost(local_dof_indices[i]);	 
 	  T_ULocalConvConv[i]= T_UnnGhost(local_dof_indices[i]);
 
 	  //momentum equation terms
-	  ULocal[i]= UnGhost(local_dof_indices[i]);	 
+	  ULocal[i]= UItmGhost(local_dof_indices[i]);	 
+	  //ULocal[i]= UGhost(local_dof_indices[i]);	 
 	  ULocalConv[i]= UnGhost(local_dof_indices[i]);	 
 	  ULocalConvConv[i]= UnnGhost(local_dof_indices[i]);	  
 	}
@@ -739,8 +773,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     
 	Pr_locally_relevant_solution = completely_distributed_solution;
 	Pr_dU=completely_distributed_solution;
-      
-              
+                    
   }   
 
   
@@ -830,37 +863,68 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
   
   //Solve
   template <int dim>
-  void phaseField<dim>::solve() { 
+  void phaseField<dim>::solve() {     
+    pcout << "Solving for intermediate toggle  "<<std::endl<<std::endl;      
+    double error_U=10; double error_T=10; double MAXX=10; unsigned int toggleSteps=0;
+    while (true) {    
+      //for (unsigned int tog=0 ; tog<20 ; tog++) {
       double res=1, tol=1.0e-12, abs_tol=1.0e-11, initial_norm=0, current_norm=0;
       double machineEPS=1.0e-15;
       currentIteration=0;
-      char buffer[200];         
-      pcout << "Solving for momentum "<<std::endl;
+      char buffer[200];          
+      pcout << "Solving for momentum "<<std::endl;      
+      while (true){
+	if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n \n"); pcout<<buffer; break;exit (1);}
+	if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
+	assemble_system();       
+	current_norm=system_rhs.l2_norm();     
+	initial_norm=std::max(initial_norm, current_norm);
+	res=current_norm/initial_norm;
+	sprintf(buffer,"inc:%3u (time:%10.3e, dt:%10.3e), iter:%2u, abs-norm: %10.2e, rel-norm: %10.2e\n", currentIncrement, currentTime, dt,  currentIteration, current_norm, res); pcout<<buffer; 
+	if ((currentIteration>1) && ((res<tol) || (current_norm<abs_tol))){sprintf(buffer,"residual converged in %u iterations.\n\n", currentIteration); pcout<<buffer; break;}
+	solveIteration();
+	//U+=dU; UGhost=U;
+	UItm+=dU; UItmGhost=UItm; 
+	++currentIteration;
+      }
+      //Solve for T using UItm
+      solve_temp();     
       
-    while (true){
-      if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
-      if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
-      assemble_system();       
-      current_norm=system_rhs.l2_norm();     
-      initial_norm=std::max(initial_norm, current_norm);
-      res=current_norm/initial_norm;
-      sprintf(buffer,"inc:%3u (time:%10.3e, dt:%10.3e), iter:%2u, abs-norm: %10.2e, rel-norm: %10.2e\n", currentIncrement, currentTime, dt,  currentIteration, current_norm, res); pcout<<buffer; 
-      if ((currentIteration>1) && ((res<tol) || (current_norm<abs_tol))){sprintf(buffer,"residual converged in %u iterations.\n\n", currentIteration); pcout<<buffer; break;}
-      solveIteration();
-      U+=dU; UGhost=U; 
-      ++currentIteration;
+      //calculate tolerance 
+      ++toggleSteps;
+      DIFFU=UItm; DIFFU-=UItmold; DIFFT=T_UItm; DIFFT-=T_UItmold;
+      error_U=DIFFU.l2_norm();error_T=DIFFT.l2_norm(); 
+      MAXX=std::max(error_U,error_T);
+      //  sprintf(buffer,"time:%10.3e, dt:%10.3e, togg:%u, error: %10.2e \n \n", currentTime, dt,  toggleSteps, MAXX); pcout<<buffer;       
+      if (MAXX<TOLERANCE ) {	
+	pcout << "Value of MAXX is:  " << MAXX << std::endl; 
+	sprintf(buffer,"intermediate steps converged in %u steps, error is: %10.2e \n \n", toggleSteps, MAXX); pcout<<buffer; break;
+      }
+      
+      
+      if (1/*MAXX<TOLERANCE*/ ) {
+	//	error_U=10; error_T=10;
+	//pcout << "Value of MAXX is:  " << MAXX << std::endl; 
+	sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", toggleSteps, MAXX); pcout<<buffer; //break;
+	}
+      
+      
+      if (toggleSteps>20){sprintf(buffer, "maximum number of intermediate iterations reached without convergence . \n \n"); pcout<<buffer; break;exit(1);}           
+      error_U=10; error_T=10; MAXX=10;
+      UItmold=UItm; T_UItmold=T_UItm;
     }
-
-    pcout << std::endl;
-
-    if (1){
-      solve_Pr();// for projection solve : solve based on converged U and not Un
-      L2_projection();
-      update_pressure(); //update values of U and UGhost
-    }
-    Unn=Un; UnnGhost=Unn; 
-    Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
-    solve_temp();
+    
+    //Do update after satisfying tolerance
+    
+    U=UItm; UGhost=U;     
+    T_U=T_UItm; T_UGhost=T_U; 
+    pcout << std::endl;   
+    solve_Pr();// for projection solve : solve based on converged UItm 
+    // L2_projection();
+    update_pressure(); //update values of U and UGhost    
+    Unn=Un; UnnGhost=Unn;        
+    T_Unn=T_Un; T_UnnGhost=T_Unn;
+    T_Un=T_U; T_UnGhost=T_Un;
     update_TintoU();
     Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
   }
@@ -886,7 +950,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       sprintf(buffer,"inc:%3u (time:%10.3e, dt:%10.3e), iter:%2u, abs-norm: %10.2e, rel-norm: %10.2e\n", currentIncrement, currentTime, dt,  currentIteration, current_norm, res); pcout<<buffer; 
       if ((currentIteration>1) && ((res<tol) || (current_norm<abs_tol))){sprintf(buffer,"residual converged in %u iterations.\n\n", currentIteration); pcout<<buffer; break;}
       solveIteration_Pr();
-      Pr_U+=Pr_dU; Pr_UGhost=Pr_U; 
+      Pr_U+=Pr_dU; Pr_UGhost=Pr_U;
       ++currentIteration;
     }
       //Pr_U.operator*=(1.5/dt);
@@ -916,13 +980,11 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       sprintf(buffer,"inc:%3u (time:%10.3e, dt:%10.3e), iter:%2u, abs-norm: %10.2e, rel-norm: %10.2e\n", currentIncrement, currentTime, dt,  currentIteration, current_norm, res); pcout<<buffer; 
       if ((currentIteration>1) && ((res<tol) || (current_norm<abs_tol))){sprintf(buffer,"residual converged in %u iterations.\n\n", currentIteration); pcout<<buffer; break;}
       solveIteration_temp();
-      T_U+=T_dU; T_UGhost=T_U; 
+      //T_U+=T_dU; T_UGhost=T_U; 
+      T_UItm+=T_dU; T_UItmGhost=T_UItm; 
       ++currentIteration;
     }
     
-      T_Unn=T_Un; T_UnnGhost=T_Unn;
-      T_Un=T_U; T_UnGhost=T_Un;
-  
   }
 
   
@@ -968,15 +1030,17 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
 	       //RHS
 	       unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;
 	       if(ci==2) {
-		 local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadGradU[q][0][0])*fe_values.JxW(q);
-		 local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadGradU[q][1][1])*fe_values.JxW(q);
+		 for(unsigned int d=0; d<dim ; ++d) {
+		   local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadGradU[q][d][d])*fe_values.JxW(q);		   
+		 }
 		 //local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(Pr_quadSolutions[q][2])*fe_values.JxW(q);
 		 //local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadSolutions[q][2])*fe_values.JxW(q);
 	       }
 	       
 	       for (unsigned int j=0; j<dofs_per_cell ; ++j) {
 		 unsigned int cj = fe_values.get_fe().system_to_component_index(j).first - 0;
-		 if(ci==cj && ci==2) local_matrix[i][j]+=fe_values.shape_value_component(i, q,2)*fe_values.shape_value_component(j, q,2)*fe_values.JxW(q);	    
+		 if(ci==cj && ci==2) { 
+		   local_matrix[i][j]+=fe_values.shape_value_component(i, q,dim)*fe_values.shape_value_component(j, q,dim)*fe_values.JxW(q);	    }
 	       }
 	     }
 	}
@@ -1146,8 +1210,9 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     std::vector<unsigned int> numRepetitions;
     numRepetitions.push_back(XSubRf); // x refinement
     numRepetitions.push_back(YSubRf); // y refinement
-    Point<2> p1 (0,0);
-    Point<2> p2 (problemLength,problemHeight);
+    //numRepetitions.push_back(ZSubRf); // z refinement
+    Point<dim> p1 (0,0);
+    Point<dim> p2 (problemLength,problemHeight);
     GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
    
 
@@ -1174,17 +1239,20 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
     currentIncrement=0;
     for (currentTime=2*dt; currentTime<totalTime; currentTime+=dt){
       currentIncrement++;
-      pcout << std::endl;
-      // UnnGhost=UnGhost; //saving k-1 data for u and p
-      //Pr_UnnGhost=Pr_UnGhost;   //saving k-1 data for phi  
-      solve(); //for diffuse solve       
-      
-      //solve_temp();
-      //update_TintoU();
-      //Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
+      pcout << std::endl;         
+            
+      if (currentTime>4*dt) {
+	solve();
+      } //for diffuse solve                  
+      else {
+      solve_temp();
+      update_TintoU();
+      Unn=Un; UnnGhost=Unn; // copy updated values in Un and UnGhost;
+      Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
+      } 
 
       int NSTEP=(currentTime/dt);
-      if (NSTEP%1==0) output_results(currentIncrement);      
+      if (NSTEP%1000==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

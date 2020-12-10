@@ -11,15 +11,17 @@
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.1
-#define TotalTime 250*TimeStep
+#define TimeStep 0.0001
+#define TotalTime 500004*TimeStep
+#define TOLERANCE 1.0e-08
+
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 200 //53
-#define YSubRf 50 //106
+#define XSubRf 100 //53
+#define YSubRf 25 //106
 #define ZSubRf 1
 
 //Material parameters of ss316
@@ -46,7 +48,7 @@
 #define deltaT 40.0
 
 //scan speed
-#define VV 1.0e-03
+#define VV 5.0e-03
 
 //Thermal Conductivity
 #define KK 11.82+(1.06e-02)*T_conv[q]
@@ -78,7 +80,7 @@
 #define DD 2.0
 #define BB 2.0
 #define spotRadius (1.5/1000.0)
-#define PP 2.0*90.0
+#define PP 3.0*90.0
 #define LAYER (0.1/1000.0)
 #define ABSORB 1.0
 

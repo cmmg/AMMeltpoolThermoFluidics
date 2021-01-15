@@ -2,86 +2,91 @@
 #define DIMS 6 //2
 #define FEOrder 2
 
-#define problemHeight 0.0015 //[1]
-#define problemWidth 0.002   //[2]
-#define problemLength 0.00625//[0]
+#define problemHeight 1.61e-04 //[1]
+#define problemWidth 2.0e-04   //[2]
+#define problemLength 6.0e-04//[0]
 
 #define globalRefinementFactor 0
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
-#define TimeStep 0.1
-#define TotalTime 75*TimeStep
+#define TimeStep 1.0e-06
+#define TotalTime 504*TimeStep
+#define TOLERANCE 1.0e-08
 
 //output controls
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 20 //60
-#define YSubRf 40 //15
-#define ZSubRf 40 //35
+#define XSubRf 45 //60
+#define YSubRf 15 //15
+#define ZSubRf 15 //35
 
 //Material parameters of ss316
 
 //viscosity
-#define mu 7.0e-03
+#define mu 3.0e-03
 
 //surface tension grad
-#define dGammadT -0.4e-03
+#define dGammadT -2.13e-04
 
 //expansion coeff
-#define BETA 5.85e-05
+#define BETA 9.541e-05
 
 //PDAS in micron
 #define PDAS 0.5
 
 //Liquidus Temperature
-#define TLL 1733.0
+#define TLL 868.0
 
 //Solidus Temperature
-#define TSS 1693.0
+#define TSS 743.0
 
 //melting range
-#define deltaT 40.0
+#define deltaT 125.0
 
 //scan speed
-#define VV 0.0085
+#define VV 1.0
 
 //Thermal Conductivity
-#define KK 11.82+(1.06e-02)*T_conv[q]
+#define KKS 72.0
 
-#define KKS 60.0
+#define KKL 82.9
 
 //Heat Specific Capacity C
-#define CC 330.9+(0.5653)*T_conv[q]-(4.015e-04)*T_conv[q]*T_conv[q]+(9.465e-08)*T_conv[q]*T_conv[q]*T_conv[q]
+#define CCL 1230.0
 
-#define CCS 790.0
+#define CCS 1014.0
 
 //Density of Material
-#define RHO 7800.0 //4420.0
+#define RHOS 1809.5//4420.0
+
+//Density of Material
+#define RHOL (1731.2 -0.2208*(T_conv[q]-TLL)) //4420.0
+
 
 //Ambient Temperature
-#define Tamb 301.3
+#define Tamb 293.15
 
 //Heat Transfer coefficient
-#define HH 10.0
+#define HH 1000.0 //10.0
 
 //Latent Heat
-#define LATENT 2.72e+05
+#define LATENT 3.73e+05
 
 //Radiation parameters
 #define SIG (5.67037*pow(10.0,-8))
-#define em 0.7  
+#define em 0.18  
 
 //Laser parameters
 #define DD 2.0
 #define BB 2.0
-#define spotRadius (0.6/1000.0)
-#define PP 275.0
-#define LAYER (0.254/1000.0)
-#define ABSORB 0.99
-
+#define spotRadius (0.08/1000.0)
+#define PP 200.0
+#define LAYER (0.04/1000.0)
+#define ABSORB 0.18
+#define porosity 0.475
 
 //gravity
 #define gravity 9.8

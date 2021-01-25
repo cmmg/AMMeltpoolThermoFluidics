@@ -121,27 +121,50 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
       if(ck>=0 && ck<3) {
 	Point<dim> qPoint=fe_values.quadrature_point(q); 
 	double RHOT=0,muT=0;       
+	
+	/*
+	if ((qPoint[1]>problemHeight-LAYER) ) {
+	  //powder bed include porosity	
+	  RHOT=(1-porosity)*RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	
+	  muT=mu;
+	}
+	
+	else if ((qPoint[1]<=problemHeight-LAYER) ) {
+	  //fused bed	
+	  RHOT=RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	
+	  muT=mu;
+	}
+      */
+
 
 	if ((qPoint[1]>problemHeight-LAYER)) {
-	  //powder bed include porosity	
-	  RHOT=(1-porosity)*RHOL*(liquid_conv[q])+RHOS*(1-liquid_conv[q]);	
-	  muT=mu;
-	}
-	else if ((qPoint[1]<=problemHeight-LAYER)) {	  
-	  RHOT=RHOL*(liquid_conv[q])+RHOS*(1-liquid_conv[q]);	
-	  muT=mu;
+	  if ((qPoint[0]>VV*currentTime)) {
+	    RHOT=(1-porosity)*RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	
+	    muT=mu;
+	  }
+	  else if ((qPoint[0]<=VV*currentTime)) {
+	    RHOT=RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	
+	    muT=mu;
+	  }
+
 	}
 	
+	else if ((qPoint[1]<=problemHeight-LAYER)) {
+	  RHOT=RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	
+	  muT=mu;
 
+	}
+
+	       		
 	//Massterm
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*vel[q][ck]-4.0*vel_conv[q][ck]+vel_conv_conv[q][ck])*fe_values.JxW(q);
-	
+		
 	//viscous term
 	if (liquid_conv[q]>0.05) {
 	  for (unsigned int j = 0; j < dim; j++){
 	    R[i]+= (muT/RHOT)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
-	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    //R[i]+= (mu/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	    //R[i]+= (muT/RHOT)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	    //R[i]+= (muT/RHOT)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
 	  }
 	}
 
@@ -149,10 +172,11 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	else if (liquid_conv[q]<=0.05) {
 	  for (unsigned int j = 0; j < dim; j++){
 	    R[i]+= (muT/RHOT)*fe_values.shape_grad_component(i, q, ck)[j]*(vel_j[q][ck][j])*fe_values.JxW(q);
-	    //R[i]+= ((1.0e+3)/RHO)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
-	    //R[i]+= ((1.0e+3)/RHO)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	    //R[i]+= ((1.0e+3)/RHOT)*fe_values.shape_grad_component(i, q, ck)[j]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
+	    //R[i]+= ((1.0e+3)/RHOT)*fe_values.shape_grad_component(i, q, j)[ck]*(gamma_tense[q][ck][j])*fe_values.JxW(q);
 	  }
-	}
+	} 
+	
 	
 	 // pressure (kineitc)
 	R[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[ck]*(press_conv[q])*fe_values.JxW(q);
@@ -174,11 +198,10 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	if (liquid_conv[q]>1) {num=1.0;}
 	else if(liquid_conv[q]<=1 && liquid_conv[q]>0) {num=liquid_conv[q];}
 	else {num=0.0;}
-	//AA=(5.0e+00)*(1/RHO)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q]))/(std::abs(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+1.0e-05); 
-	AA=(1.0e+03)*(1.0)*((1.0-num)*(1.0-num))/(std::abs(num*num*num)+1.0e-05); 	
+	AA=(1.0e+03)*(1.0)*((1.0-liquid_conv[q])*(1.0-liquid_conv[q]))/(std::abs(liquid_conv[q]*liquid_conv[q]*liquid_conv[q])+1.0e-05); 
+	//AA=(1.0e+03)*(1.0)*((1.0-num)*(1.0-num))/(std::abs(num*num*num)+1.0e-05); 	
 	R[i]+=fe_values.shape_value_component(i, q, ck)*((AA)*vel[q][ck])*fe_values.JxW(q);
-	
-	
+		
 	//advection term
 	//first part	
 	for (unsigned int j = 0; j < dim; j++){	  
@@ -206,8 +229,29 @@ void residualForChemo(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	    if ((ck==0 ||ck==2) ) {  
 	      Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
 	      double RHOT=0,muT=0;
-	      RHOT=(1-porosity)*RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
-	      R[i] +=-(1.0)*(1.0/RHOT)*fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);    
+	      	      
+	      if ((qPoint[0]>VV*currentTime)) {
+		RHOT=(1-porosity)*RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
+	      }
+	      else if (qPoint[0]<=VV*currentTime) {
+		RHOT=RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
+	      }
+		
+
+	      /*
+	      if ((liquidface_conv[q]>=0)) {
+		RHOT=RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
+	      }
+	      
+	      else if (liquidface_conv[q]<0 && (qPoint[0]>VV*currentTime)) {
+		RHOT=(1-porosity)*RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
+	      }
+
+	      else if (liquidface_conv[q]<0 && (qPoint[0]<=VV*currentTime)) {
+		RHOT=RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
+		} */
+	      	      
+	      R[i] +=-(1.0)*(1.0/RHOT)*fe_face_values.shape_value_component(i, q, ck)*(dGammadT*Tfaceconv_j[q][ck])*fe_face_values.JxW(q);   
 	    }
 	    
 	  }

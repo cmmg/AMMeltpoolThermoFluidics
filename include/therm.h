@@ -91,22 +91,28 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     for (unsigned int q=0; q<n_q_points; ++q) {     
       if (ck==4) {		
 	Point<dim> qPoint=fe_values.quadrature_point(q);  
+	
 
 	if ((qPoint[1]>problemHeight-LAYER)) {
-	  //powder bed include porosity
-	  KK_T=(1-porosity)*KKS*(1-liquid_conv[q])+KKL*(liquid_conv[q]); 
-	  RHOT=(1-porosity)*RHOS*(liquid_conv[q])+RHOL*(1-liquid_conv[q]);	  
-	  CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);
-
+	  if ((qPoint[0]>VV*currentTime)) {	    
+	    KK_T=(1-porosity)*KKS*(1-liquid_conv[q])+KKL*(liquid_conv[q]); 
+	    RHOT=(1-porosity)*RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	  
+	    CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);
+	  }
+	  else if ((qPoint[0]<=VV*currentTime)) {	    
+	    KK_T=KKS*(1-liquid_conv[q])+KKL*(liquid_conv[q]); 
+	    RHOT=RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	  
+	    CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);
+	  }
+	  
 	}
 	
-	else if ((qPoint[1]<problemHeight-LAYER)) {
+	else if ((qPoint[1]<=problemHeight-LAYER)) {
 	  KK_T=KKS*(1-liquid_conv[q])+KKL*(liquid_conv[q]); 
-	  RHOT=RHOS*(liquid_conv[q])+RHOL*(1-liquid_conv[q]);	 
-	  CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);
- 
+	  RHOT=RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);	  
+	  CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);	  
 	}
-
+	
 	//Mass term
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*T[q]-4.0*T_conv[q]+T_convconv[q])*fe_values.JxW(q);
 
@@ -165,12 +171,19 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	    Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
 	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
 	    Sacado::Fad::DFad<double>  KK_T,CC_T,RHOT;
-	    
-	    KK_T=(1-porosity)*KKS*(1-liquidface_conv[q])+KKL*(liquidface_conv[q]); 
-	    RHOT=(1-porosity)*RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
-	    CC_T=(RHOS/RHOL)*CCS*(1-liquidface_conv[q])+(RHOL/RHOT)*CCL*(liquidface_conv[q]);
+	 
+	    if ((qPoint[0]>VV*currentTime)) {	      
+	      KK_T=(1-porosity)*KKS*(1-liquidface_conv[q])+KKL*(liquidface_conv[q]); 
+	      RHOT=(1-porosity)*RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
+	      CC_T=(RHOS/RHOL)*CCS*(1-liquidface_conv[q])+(RHOL/RHOT)*CCL*(liquidface_conv[q]);	   	      
+	    }
+	    else if (qPoint[0]<=VV*currentTime) {
+	      KK_T=KKS*(1-liquidface_conv[q])+KKL*(liquidface_conv[q]); 
+	      RHOT=RHOS*(1-liquidface_conv[q])+RHOL*(liquidface_conv[q]);
+	      CC_T=(RHOS/RHOL)*CCS*(1-liquidface_conv[q])+(RHOL/RHOT)*CCL*(liquidface_conv[q]);	   	      		
+	    }
 
-	    
+	    	    
 	    R[i] +=(1.0/RHOT/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tamb)*fe_face_values.JxW(q);
 	    R[i] +=(1.0/RHOT/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
 

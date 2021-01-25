@@ -169,7 +169,7 @@ namespace phaseField1
     //Setup boundary conditions
     std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true; uB[2]=true;
     std::vector<bool> uBT (DIMS, false); uBT[1]=true; 
- 
+    std::vector<bool> uBF (DIMS, false); uBF[2]=true;  
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //left
@@ -189,8 +189,8 @@ namespace phaseField1
     VectorTools::interpolate_boundary_values (dof_handler, 3, ZeroFunction<dim>(DIMS) , constraintsZero,uBT);    
     
     //front
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraints,uB);
-    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uB);
+    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraints,uBF);
+    VectorTools::interpolate_boundary_values (dof_handler, 4, ZeroFunction<dim>(DIMS) , constraintsZero,uBF);
     
     //back
     VectorTools::interpolate_boundary_values (dof_handler, 5, ZeroFunction<dim>(DIMS) , constraints,uB);
@@ -1254,7 +1254,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       currentIncrement++;
       pcout << std::endl;         
             
-      if (1/*currentTime>4*dt*/) {
+      if (1/*currentTime>2*dt*/) {
 	solve();
       } //for diffuse solve                  
       else {
@@ -1265,7 +1265,7 @@ SparsityTools::distribute_sparsity_pattern (Pr_dsp, Pr_dof_handler.n_locally_own
       } 
 
       int NSTEP=(currentTime/dt);
-      if (NSTEP%25==0) output_results(currentIncrement);      
+      if (NSTEP%20==0) output_results(currentIncrement);      
       pcout << std::endl;
      
     }

@@ -12,7 +12,7 @@
 
 //time step controls
 #define TimeStep 1.0e-06
-#define TotalTime 504*TimeStep
+#define TotalTime 554*TimeStep
 #define TOLERANCE 1.0e-08
 
 //output controls
@@ -70,7 +70,7 @@
 #define Tamb 293.15
 
 //Heat Transfer coefficient
-#define HH 1000.0 //10.0
+#define HH 10.0 //10.0
 
 //Latent Heat
 #define LATENT 3.73e+05
@@ -83,7 +83,7 @@
 #define DD 2.0
 #define BB 2.0
 #define spotRadius (0.08/1000.0)
-#define PP 200.0
+#define PP 100.0
 #define LAYER (0.04/1000.0)
 #define ABSORB 0.18
 #define porosity 0.475

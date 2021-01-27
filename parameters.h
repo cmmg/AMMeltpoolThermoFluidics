@@ -19,9 +19,9 @@
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 45 //60
-#define YSubRf 15 //15
-#define ZSubRf 15 //35
+#define XSubRf 60 //60
+#define YSubRf 20 //15
+#define ZSubRf 20 //35
 
 //Material parameters of ss316
 

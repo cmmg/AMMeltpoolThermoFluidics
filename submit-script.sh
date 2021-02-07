@@ -16,10 +16,11 @@
 
 #Now list your executable command (or a string of them).
 # Example for non-SLURM-compiled code:
-source ~/.bashrc
-cd /home/kbhagat2/workspace/LaserThermoFluid/3D_DED_try1
-rm -rf CMakeCache.txt cmake_install.cmake Makefile CMakeFiles 
-cmake .
-cmake -DCMAKE_BUILD_TYPE=Release . 
+source /software/groups/cmmg_group/.bashrc
+cd /home/kbhagat2/workspace/FluidTesting/DThomaCollab/3D_SLM
+rm -rf CMakeCache.txt cmake_install.cmake Makefile CMakeFiles
+cmake -DCMAKE_BUILD_TYPE=Release .
 make
 mpirun -np 20 ./main
+
+

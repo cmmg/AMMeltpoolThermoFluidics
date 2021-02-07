@@ -22,7 +22,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   dealii::Table<1,double> T_conv(n_q_points),Tface_conv(n_q_points);
   dealii::Table<1,double> T_convconv(n_q_points);
 
-  dealii::Table<1,double> liquid_conv(n_q_points);
+  dealii::Table<1,double> liquid_conv(n_q_points),liquidface_conv(n_q_points);
   dealii::Table<1,double> liquid_convconv(n_q_points);
   
   //evaluate gradients 
@@ -36,7 +36,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     for (unsigned int j=0; j<dim; j++) {T_j[q][j]=0.0; liquid_j[q][j]=0.0; vel[q][j]=0.0; }
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;     
-       if (ck>=0 && ck< 3) { 
+       if (ck>=0 && ck<3) { 
 	 vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
       }
            
@@ -62,19 +62,22 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //Interpolate over faces
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
-    double CHECKL=cell->face(f)->center()[0];
+    //double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
-    double CHECKW=cell->face(f)->center()[2];      
-    if(CHECKL ==0 ||CHECKL== problemLength||CHECKW ==0 ||CHECKW== problemWidth||CHECKH== problemHeight) {
-    //    if(cell->face(f)->center()[1] == problemHeight) {      
+    //double CHECKW=cell->face(f)->center()[2];      
+    //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
+    if(cell->face(f)->center()[1] == problemHeight) {      
       for (unsigned int q=0; q<n_q_points_face; ++q) {
-	Tface[q]=0.0; Tface_conv[q]=0.0;   
+	Tface[q]=0.0; Tface_conv[q]=0.0;   liquid_conv[q]=0;
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	  if (ck==4) {
 	    Tface[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocal[i]; 
-	    Tface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i]; 
+	    Tface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i];	    
 	  }
+	  else if (ck==5) {
+	    liquidface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i];	    
+	  }	  
 	}       
       }
     }
@@ -87,19 +90,15 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     Sacado::Fad::DFad<double>  KK_T,CC_T;      
     for (unsigned int q=0; q<n_q_points; ++q) {     
       if (ck==4) {		
-	//KK_T=KK+liquid[q]*(KKL-KK);
-	//RHOCC_T=CC*RHO+liquid[q]*(CCL*RHOL-CC*RHO);
-	if (T_conv[q]<TLL) {KK_T=KK;CC_T=CC;}
-	else {
-	  KK_T=KKS; CC_T=CCS;
-	}
-	
+	KK_T=(1-liquid_conv[q])*KKS+(liquid_conv[q])*KKL;
+	CC_T=(1-liquid_conv[q])*CCS+(liquid_conv[q])*CCL;
+
 	//Mass term
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*T[q]-4.0*T_conv[q]+T_convconv[q])*fe_values.JxW(q);
 
 	//Advection term : temperature and phi
 	for (unsigned int j = 0; j < dim; j++){
-	  //R[i] +=(LATENT/CC)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
+	  R[i] +=(LATENT/CC_T)*fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(liquid_j[q][j])*fe_values.JxW(q);
 	  R[i] +=fe_values.shape_value_component(i, q,ck)*(vel[q][j])*(T_j[q][j])*fe_values.JxW(q);
 	}
 
@@ -136,12 +135,11 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //surface integral
   for (unsigned int f=0; f < faces_per_cell; f++) { 
     fe_face_values.reinit (cell, f);
-    double CHECKL=cell->face(f)->center()[0];
+    //double CHECKL=cell->face(f)->center()[0];
     double CHECKH=cell->face(f)->center()[1];
-    double CHECKW=cell->face(f)->center()[2];      
-
-    if(CHECKL ==0 ||CHECKL== problemLength||CHECKW ==0 ||CHECKW== problemWidth||CHECKH==problemHeight) {
-    //  if(cell->face(f)->center()[1] == problemHeight && cell->face(f)->center()[2]==0.5*problemWidth) {      
+    //double CHECKW=cell->face(f)->center()[2];      
+    //    if(CHECKL ==0 ||CHECKL== problem_Length||CHECKW ==0 ||CHECKW== problem_Width||CHECKH== problem_Height) {
+      if(cell->face(f)->center()[1] == problemHeight /*&& cell->face(f)->center()[2]==0.5*problem_Width*/) {      
       //evaluate Residual on face
       for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
@@ -150,9 +148,13 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	  if (ck==4) {  
 	    //Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
 	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
-	    Sacado::Fad::DFad<double>  KK_T,CC_T;
-	    if (Tface_conv[q]<TLL)  {KK_T= KK;CC_T= CC; }
-	    else {KK_T=KKS;CC_T=CCS; }
+	    Sacado::Fad::DFad<double>  KK_T=0,CC_T=0;
+	    
+	   
+	    KK_T=(1-liquidface_conv[q])*KKS+(liquidface_conv[q])*KKL;
+	    CC_T=(1-liquidface_conv[q])*CCS+(liquidface_conv[q])*CCL;
+
+	    
 	    R[i] += (1.0/RHO/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tamb)*fe_face_values.JxW(q);
 	    R[i] += (1.0/RHO/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
 	  

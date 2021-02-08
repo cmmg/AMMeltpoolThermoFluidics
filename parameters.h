@@ -1,12 +1,12 @@
 //problem geometry, mesh control
-#define DIMS 5 //2
+#define DIMS 6 //2
 #define FEOrder 2
 
 #define problemWidth  0.0002 //[2]
 #define problemHeight 0.0002   //[1]
 #define problemLength 0.002   //[0]
 
-#define globalRefinementFactor 0
+#define globalRefinementFactor 3
 #define maxRefinementLevel (globalRefinementFactor+2)
 #define minRefinementLevel (globalRefinementFactor)
 
@@ -20,9 +20,9 @@
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 40 //53
-#define YSubRf 10 //106
-#define ZSubRf 10
+#define XSubRf 1 //53
+#define YSubRf 1 //106
+#define ZSubRf 1
 
 //Material parameters of ss316
 

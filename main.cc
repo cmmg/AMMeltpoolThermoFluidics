@@ -300,17 +300,12 @@ namespace phaseField1
     Un.reinit (locally_owned_dofs, mpi_communicator);
     dU.reinit (locally_owned_dofs, mpi_communicator);    
     Unn.reinit (locally_owned_dofs, mpi_communicator);
-    
-    UItm.reinit (locally_owned_dofs, mpi_communicator);
-    UItmold.reinit (locally_owned_dofs, mpi_communicator);
-    //DIFFU.reinit(T_locally_owned_dofs, mpi_communicator);
-    
+        
     //Ghost vectors
     UGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     UnnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     
-    UItmGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions(0);
@@ -402,16 +397,13 @@ namespace phaseField1
     T_dU.reinit (T_locally_owned_dofs, mpi_communicator);    
     T_Unn.reinit (T_locally_owned_dofs, mpi_communicator);
 
-    T_UItm.reinit (T_locally_owned_dofs, mpi_communicator);
-    T_UItmold.reinit (T_locally_owned_dofs, mpi_communicator);
     //DIFFT.reinit(T_locally_owned_dofs, mpi_communicator);
 
     //Ghost vectors
     T_UGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
     T_UnGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
     T_UnnGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
-    
-    T_UItmGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
+
 
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions_temp(0);
@@ -1199,12 +1191,12 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	           
 	       //limit the maximal and minimal refinement depth of the mesh
 	       unsigned int current_level = t_cell->level();
-
+	       
 	       // Mark qPoins where refinement is to be done using bool.
 	       bool mark_refine = false, mark_refine_liquid=false;
 	       for (unsigned int q=0; q<n_q_points; ++q){
 		 Point<dim> qPoint=fe_values.quadrature_point(q);
-		 if ((qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*1.5) && (qPoint[1]>(laserLocationY-laserRadius*0.5))){
+		 if ((qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*1.0) && (qPoint[1]>(laserLocationY-laserRadius*0.5))){
 		 //if (quadSolutions[q][4]>=TSS){
 		     mark_refine=true; //set refine
 		         
@@ -1236,77 +1228,83 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	   //
 	   if (checkSum>0.0){
 	     
-	     //define solutiontrnafer object for fluid,projection and teperature 
+	     //define solution transfer object
 	     parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector > soltrans(dof_handler);
-	     parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector > soltrans_Pr(dof_handler);
-	     parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector >  soltrans_T(dof_handler);
-	     //execute refinement    
-	     std::vector<LA::MPI::Vector* > U_Allold(3),Pr_U_Allold(3),T_U_Allold(3);
-	     std::vector<const LA::MPI::Vector* > UGhost_All(3),Pr_UGhost_All(3),T_UGhost_All(3);
-	     std::vector<LA::MPI::Vector* > U_Allnew(3),Pr_U_Allnew(3),T_U_Allnew(3);
-
-	     UGhost_All[0]=&UGhost; UGhost_All[1]=&UnGhost; UGhost_All[2]=&UnnGhost;
-	     Pr_UGhost_All[0]=&Pr_UGhost; Pr_UGhost_All[1]=&Pr_UnGhost; Pr_UGhost_All[2]=&Pr_UnnGhost;
-	     T_UGhost_All[0]=&T_UGhost; T_UGhost_All[1]=&T_UnGhost; T_UGhost_All[2]=&T_UnnGhost;
-
+	     
 	     // prepare the triangulation,
 	     triangulation.prepare_coarsening_and_refinement();
-	     
+
 	     // prepare the SolutionTransfer object for coarsening and refinement
 	     // and give the solution vector that we intend to interpolate later,
-	     soltrans.prepare_for_coarsening_and_refinement(UGhost_All);
-	     soltrans_Pr.prepare_for_coarsening_and_refinement(Pr_UGhost_All);
-	     soltrans_T.prepare_for_coarsening_and_refinement(T_UGhost_All);
-	     
-	     // actually execute the refinement,
+	       //Define a vector of vectors to store prev step  and prev to prev step ghosted variables
+	     std::vector<const LA::MPI::Vector*> InputGhosted(8);
+	     InputGhosted[0]=&UnGhost;	     InputGhosted[1]=&UnnGhost;	    
+	     InputGhosted[2]=&Pr_UnGhost;    InputGhosted[3]=&Pr_UnnGhost;	     
+	     InputGhosted[4]=&T_UnGhost;     InputGhosted[5]=&T_UnnGhost;
+	     InputGhosted[6]=&UItmGhost;     InputGhosted[7]=&T_UItmGhost;
+
+	     soltrans.prepare_for_coarsening_and_refinement(InputGhosted);  
 	     triangulation.execute_coarsening_and_refinement ();
 	     
-	     U_Allold[0]=&U; U_Allold[1]=&Un; U_Allold[2]=&Unn;
-	     Pr_U_Allold[0]=&Pr_U; Pr_U_Allold[1]=&Pr_Un; Pr_U_Allold[2]=&Pr_Unn;
-	     T_U_Allold[0]=&T_U; T_U_Allold[1]=&T_Un; T_U_Allold[2]=&T_Unn;
-
-	     //reset dof's, vectors, matrices, constraints, etc. all on the new mesh.
 	     setup_system(); //initial setup
 	     setup_system_projection();   
 	     setup_system_temp();
 	     
-	     U_Allnew[0]=&U; U_Allnew[1]=&Un; U_Allnew[2]=&Unn;
-	     Pr_U_Allnew[0]=&Pr_U; Pr_U_Allnew[1]=&Pr_Un; Pr_U_Allnew[2]=&Pr_Unn;
-	     T_U_Allnew[0]=&T_U; T_U_Allnew[1]=&T_Un; T_U_Allnew[2]=&T_Unn;
+	     UItm.reinit (locally_owned_dofs, mpi_communicator);
+	     UItmold.reinit (locally_owned_dofs, mpi_communicator);
+	     UItmGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+	     
+	     T_UItm.reinit (T_locally_owned_dofs, mpi_communicator);
+	     T_UItmold.reinit (T_locally_owned_dofs, mpi_communicator);
+	     T_UItmGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
+    
+	     std::vector< LA::MPI::Vector*> tmp(8);
+	     
+	     //tmp[0]->reinit(Un);
+	     //tmp[1]->reinit(Unn);
+	     //tmp[2]->reinit(Pr_Un);
+	     //tmp[3]->reinit(Pr_Unn);
+	     //tmp[4]->reinit(T_Un);
+	     //tmp[5]->reinit(T_Unn);
+	     
+	     tmp[0]=(&Un);
+	     tmp[1]=(&Unn);
+	     tmp[2]=(&Pr_Un);
+	     tmp[3]=(&Pr_Unn);
+	     tmp[4]=(&T_Un);
+	     tmp[5]=(&T_Unn);
+	     tmp[6]=(&UItm);
+	     tmp[7]=(&T_UItm);
 
+	     soltrans.interpolate(tmp);
 	     
-	     // and interpolate all the solutions on the new mesh from the old mesh solution
-	     soltrans.interpolate(U_Allnew);
-	     soltrans_Pr.interpolate(Pr_U_Allnew);
-	     soltrans_T.interpolate(T_U_Allnew);
+	     //UGhost.operator=(*tmp[0]);	    
+	     UnGhost=(*tmp[0]);	     
+	     UnnGhost=(*tmp[1]);
+	     // Pr_UGhost.operator=(*tmp[2]);
+	     Pr_UnGhost=(*tmp[2]);
+	     Pr_UnnGhost=(*tmp[3]);
+	     //T_UGhost.operator=(*tmp[4]);
+	     T_UnGhost=(*tmp[4]);
+	     T_UnnGhost=(*tmp[5]);
 	     
-	     constraints.distribute(U); constraints.distribute(Un);constraints.distribute(Unn);
-	     Pr_constraints.distribute(Pr_U);Pr_constraints.distribute(Pr_Un);Pr_constraints.distribute(Pr_Unn);
-	     T_constraints.distribute(T_U);T_constraints.distribute(T_Un);T_constraints.distribute(T_Unn);
+	     UItmGhost=(*tmp[6]);
+	     T_UItmGhost=(*tmp[7]);
 	     
-	     UGhost=*U_Allnew[0];UnGhost=*U_Allnew[1]; UnnGhost=*U_Allnew[2];
-	     Pr_UGhost=*Pr_U_Allnew[0];Pr_UnGhost=*Pr_U_Allnew[1]; Pr_UnnGhost=*Pr_U_Allnew[2];
-	     T_UGhost=*T_U_Allnew[0];T_UnGhost=*T_U_Allnew[1]; T_UnnGhost=*T_U_Allnew[2];
-
-	     
-	     //UGhost=U;UnGhost=Un; UnnGhost=Unn;
-	     //Pr_UGhost=Pr_U;Pr_UnGhost=Pr_Un; Pr_UnnGhost=Pr_Unn;
-	     //T_UGhost=T_U;T_UnGhost=T_Un; T_UnnGhost=T_Unn;
-
-	     //update ghost for other
 	     UGhost.update_ghost_values();
 	     UnGhost.update_ghost_values();
 	     UnnGhost.update_ghost_values();
-
+	     
 	     Pr_UGhost.update_ghost_values();
 	     Pr_UnGhost.update_ghost_values();
 	     Pr_UnnGhost.update_ghost_values();
-
-
+	     
 	     T_UGhost.update_ghost_values();
 	     T_UnGhost.update_ghost_values();
 	     T_UnnGhost.update_ghost_values();
-
+	     
+	     UItmGhost.update_ghost_values();
+	     T_UItmGhost.update_ghost_values();
 	     //set flag for another check of refinement
 	     checkForFurtherRefinement=false;
 	   }
@@ -1377,6 +1375,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
     numRepetitions.push_back(XSubRf); // x refinement
     numRepetitions.push_back(YSubRf); // y refinement
     numRepetitions.push_back(ZSubRf); // z refinement
+    
     Point<dim> p1 (0,0,0);
     Point<dim> p2 (problemLength,problemHeight,problemWidth);
     GridGenerator::subdivided_hyper_rectangle (triangulation, numRepetitions, p1, p2, true);
@@ -1387,8 +1386,16 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
     setup_system(); //initial setup
     setup_system_projection();   
     setup_system_temp();
-    //refine_grid();
+    //   refine_grid();
     
+    UItm.reinit (locally_owned_dofs, mpi_communicator);
+    UItmold.reinit (locally_owned_dofs, mpi_communicator);
+    UItmGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
+    
+    T_UItm.reinit (T_locally_owned_dofs, mpi_communicator);
+    T_UItmold.reinit (T_locally_owned_dofs, mpi_communicator);
+    T_UItmGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
+
     //setupinitial conditions
     VectorTools::interpolate(dof_handler, InitalConditions<dim>(), U); Un=U; Unn=Un;
     UItm=U;UItmGhost=UItm; UItmold=UItm;
@@ -1422,7 +1429,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
       } 
 
       int NSTEP=(currentTime/dt);
-      if (NSTEP%1==0) output_results(currentIncrement); 
+      if (NSTEP%20==0) output_results(currentIncrement); 
       refine_grid();
       pcout << std::endl;
      

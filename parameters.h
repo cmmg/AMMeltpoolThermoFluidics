@@ -6,8 +6,8 @@
 #define problemHeight 0.0002   //[1]
 #define problemLength 0.002   //[0]
 
-#define globalRefinementFactor 3
-#define maxRefinementLevel (globalRefinementFactor+2)
+#define globalRefinementFactor 1
+#define maxRefinementLevel (globalRefinementFactor+3)
 #define minRefinementLevel (globalRefinementFactor)
 
 //time step controls
@@ -20,9 +20,9 @@
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 1 //53
-#define YSubRf 1 //106
-#define ZSubRf 1
+#define XSubRf 20 //53
+#define YSubRf 2 //106
+#define ZSubRf 2
 
 //Material parameters of ss316
 
@@ -84,7 +84,7 @@
 #define BB 2.0
 #define spotRadius (0.1/1000.0)
 #define PP 195.0
-#define LAYER (0.03/1000.0)
+#define LAYER (0.02/1000.0)
 #define ABSORB 0.7
 
 

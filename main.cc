@@ -1196,13 +1196,13 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	       bool mark_refine = false, mark_refine_liquid=false;
 	       for (unsigned int q=0; q<n_q_points; ++q){
 		 Point<dim> qPoint=fe_values.quadrature_point(q);
-		 if ((qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*1.0) && (qPoint[1]>(laserLocationY-laserRadius*0.5))){
+		 if ((qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*2.0) && (qPoint[1]>(laserLocationY-laserRadius*0.5))){
 		 //if (quadSolutions[q][4]>=TSS){
 		     mark_refine=true; //set refine
 		         
-		   //if (qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*0.5){
-		     //mark_refine_liquid=true;
-		     // } 
+		     if (qPoint.distance(Point<dim>(laserLocationX,laserLocationY,laserLocationZ))<laserRadius*0.75){
+		     mark_refine_liquid=true;
+		     } 
 
 		   break;
 		 }
@@ -1226,7 +1226,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	   if (isMeshRefined){checkSum=1.0;}
 	   checkSum= Utilities::MPI::sum(checkSum, mpi_communicator); //checkSum is greater then 0, then all processors call adative refinement shown below
 	   //
-	   if (checkSum>0.0){
+	   if (1/*checkSum>0.0*/) {
 	     
 	     //define solution transfer object
 	     parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector > soltrans(dof_handler);
@@ -1242,6 +1242,12 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	     InputGhosted[2]=&Pr_UnGhost;    InputGhosted[3]=&Pr_UnnGhost;	     
 	     InputGhosted[4]=&T_UnGhost;     InputGhosted[5]=&T_UnnGhost;
 	     InputGhosted[6]=&UItmGhost;     InputGhosted[7]=&T_UItmGhost;
+	     
+	     //InputGhosted[0]=&Un;	InputGhosted[1]=&Unn;	    
+	     //InputGhosted[2]=&Pr_Un;    InputGhosted[3]=&Pr_Unn;	     
+	     //InputGhosted[4]=&T_Un;     InputGhosted[5]=&T_Unn;
+	     //InputGhosted[6]=&UItm;     InputGhosted[7]=&T_UItm;
+
 
 	     soltrans.prepare_for_coarsening_and_refinement(InputGhosted);  
 	     triangulation.execute_coarsening_and_refinement ();
@@ -1290,6 +1296,9 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	     
 	     UItmGhost=(*tmp[6]);
 	     T_UItmGhost=(*tmp[7]);
+
+	     //UItmGhost=UnGhost;
+	     //T_UItmGhost=T_UnGhost;
 	     
 	     UGhost.update_ghost_values();
 	     UnGhost.update_ghost_values();
@@ -1302,10 +1311,11 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	     T_UGhost.update_ghost_values();
 	     T_UnGhost.update_ghost_values();
 	     T_UnnGhost.update_ghost_values();
-	     
+	    
 	     UItmGhost.update_ghost_values();
 	     T_UItmGhost.update_ghost_values();
 	     //set flag for another check of refinement
+	     	    
 	     checkForFurtherRefinement=false;
 	   }
 	   else{
@@ -1386,8 +1396,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
     setup_system(); //initial setup
     setup_system_projection();   
     setup_system_temp();
-    //   refine_grid();
-    
+     
     UItm.reinit (locally_owned_dofs, mpi_communicator);
     UItmold.reinit (locally_owned_dofs, mpi_communicator);
     UItmGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
@@ -1395,6 +1404,8 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
     T_UItm.reinit (T_locally_owned_dofs, mpi_communicator);
     T_UItmold.reinit (T_locally_owned_dofs, mpi_communicator);
     T_UItmGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);
+
+    //refine_grid();
 
     //setupinitial conditions
     VectorTools::interpolate(dof_handler, InitalConditions<dim>(), U); Un=U; Unn=Un;
@@ -1429,7 +1440,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
       } 
 
       int NSTEP=(currentTime/dt);
-      if (NSTEP%20==0) output_results(currentIncrement); 
+      if (NSTEP%10==0) output_results(currentIncrement); 
       refine_grid();
       pcout << std::endl;
      

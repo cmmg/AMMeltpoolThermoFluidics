@@ -2,17 +2,17 @@
 #define DIMS 6 //2
 #define FEOrder 2
 
-#define problemWidth  0.0002 //[2]
-#define problemHeight 0.0002   //[1]
-#define problemLength 0.002   //[0]
+#define problemWidth  0.5e-03 //[2]
+#define problemHeight 0.5e-03   //[1]
+#define problemLength 3.0e-03   //[0]
 
 #define globalRefinementFactor 1
-#define maxRefinementLevel (globalRefinementFactor+3)
-#define minRefinementLevel (globalRefinementFactor)
+#define maxRefinementLevel (globalRefinementFactor+2)
+#define minRefinementLevel (globalRefinementFactor-1)
 
 //time step controls
-#define TimeStep 1.0e-6
-#define TotalTime 1804*TimeStep
+#define TimeStep 1.0e-5
+#define TotalTime 704*TimeStep
 #define TOLERANCE 1.0e-08
 
 
@@ -20,9 +20,9 @@
 #define outputFileName "solution"
 
 //subdivisons
-#define XSubRf 20 //53
-#define YSubRf 2 //106
-#define ZSubRf 2
+#define XSubRf 6 //53
+#define YSubRf 1 //106
+#define ZSubRf 1
 
 //Material parameters of ss316
 
@@ -48,7 +48,7 @@
 #define deltaT 40.0
 
 //scan speed
-#define VV 1.083
+#define VV 0.575
 
 //Thermal Conductivity
 #define KKL 60.0 //11.82+(1.06e-02)*T_conv[q]
@@ -77,15 +77,15 @@
 
 //Radiation parameters
 #define SIG (5.67037*pow(10.0,-8))
-#define em 0.7
+#define em 0.9
 
 //Laser parameters
 #define DD 2.0
 #define BB 2.0
 #define spotRadius (0.1/1000.0)
-#define PP 195.0
+#define PP 90.0
 #define LAYER (0.02/1000.0)
-#define ABSORB 0.7
+#define ABSORB 0.9
 
 
 //gravity

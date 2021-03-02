@@ -7,7 +7,7 @@
 #define problemLength 3.0e-03   //[0]
 
 #define globalRefinementFactor 1
-#define maxRefinementLevel (globalRefinementFactor+2)
+#define maxRefinementLevel (globalRefinementFactor+3)
 #define minRefinementLevel (globalRefinementFactor-1)
 
 //time step controls

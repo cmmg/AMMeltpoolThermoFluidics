@@ -306,7 +306,7 @@ namespace phaseField1
     UnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     UnnGhost.reinit (locally_owned_dofs, locally_relevant_dofs, mpi_communicator);
     
-    
+    DIFFU.reinit(U,false);
     //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
     applyBoundaryConditions(0);
     
@@ -397,7 +397,7 @@ namespace phaseField1
     T_dU.reinit (T_locally_owned_dofs, mpi_communicator);    
     T_Unn.reinit (T_locally_owned_dofs, mpi_communicator);
 
-    //DIFFT.reinit(T_locally_owned_dofs, mpi_communicator);
+    DIFFT.reinit(T_U,false);
 
     //Ghost vectors
     T_UGhost.reinit (T_locally_owned_dofs, T_locally_relevant_dofs, mpi_communicator);

@@ -19,10 +19,10 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   unsigned int n_q_points_face= fe_face_values.n_quadrature_points;
   const unsigned int faces_per_cell = GeometryInfo<dim>::faces_per_cell;
 
-  dealii::Table<1,double> T_conv(n_q_points),Tface_conv(n_q_points);
+  dealii::Table<1,double> T_conv(n_q_points),Tface_conv(n_q_points_face);
   dealii::Table<1,double> T_convconv(n_q_points);
 
-  dealii::Table<1,double> liquid_conv(n_q_points),liquidface_conv(n_q_points);
+  dealii::Table<1,double> liquid_conv(n_q_points),liquidface_conv(n_q_points_face);
   dealii::Table<1,double> liquid_convconv(n_q_points);
   
   //evaluate gradients 
@@ -87,11 +87,31 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
   //evaluate Residual on cell
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-    Sacado::Fad::DFad<double>  KK_T,CC_T;      
+    double  KK_T=0,CC_T=0,RHOT=0;
+    
     for (unsigned int q=0; q<n_q_points; ++q) {     
       if (ck==4) {		
-	KK_T=(1-liquid_conv[q])*KKS+(liquid_conv[q])*KKL;
-	CC_T=(1-liquid_conv[q])*CCS+(liquid_conv[q])*CCL;
+	Point<dim> qPoint=fe_values.quadrature_point(q);  
+	
+	if ((qPoint[1]>problemHeight-LAYER)) {
+	  if ((qPoint[0]>VV*currentTime)) {    
+	    KK_T=(1-porosity)*KKS*(1-liquid_conv[q])+KKL*(liquid_conv[q]); 
+	    RHOT=(1-porosity)*RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);  
+	    CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);
+	  }
+	  else if ((qPoint[0]<=VV*currentTime)) {    
+	    KK_T=KKS*(1-liquid_conv[q])+KKL*(liquid_conv[q]); 
+	    RHOT=RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);  
+	    CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);
+	  }
+	    
+	}
+	
+	else if ((qPoint[1]<=problemHeight-LAYER)) {
+	  KK_T=KKS*(1-liquid_conv[q])+KKL*(liquid_conv[q]); 
+	  RHOT=RHOS*(1-liquid_conv[q])+RHOL*(liquid_conv[q]);  
+	  CC_T=(RHOS/RHOT)*CCS*(1-liquid_conv[q])+(RHOL/RHOT)*CCL*(liquid_conv[q]);  
+	  }
 
 	//Mass term
 	R[i]+=(0.5/dt)*fe_values.shape_value_component(i, q, ck)*(3.0*T[q]-4.0*T_conv[q]+T_convconv[q])*fe_values.JxW(q);
@@ -107,23 +127,27 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	
 	//diffusion terms
 	for (unsigned int j = 0; j < dim; j++){	
-	  R[i] +=(KK_T/RHO/CC_T)*fe_values.shape_grad_component(i, q,ck)[j]*T_j[q][j]*fe_values.JxW(q);
+	  R[i] +=(KK_T/RHOT/CC_T)*fe_values.shape_grad_component(i, q,ck)[j]*T_j[q][j]*fe_values.JxW(q);
 	}
 
 	//Laser sinl Term
 	//Sink term laser
-	Point<dim> qPoint=fe_values.quadrature_point(q);  
+
 	Sacado::Fad::DFad<double>  LASER =(ABSORB)*DD*(PP/3.1416/spotRadius/spotRadius/LAYER);
 	LASER*=std::exp(-(BB/spotRadius/spotRadius)*((qPoint[0]-VV*currentTime)*(qPoint[0]-VV*currentTime)))  ;
 	LASER*=std::exp(-(BB/spotRadius/spotRadius)*((2.0*qPoint[2]-problemWidth)*(2.0*qPoint[2]-problemWidth) ))  ;
 	LASER*=std::exp(-(BB/LAYER/LAYER)*((qPoint[1]-problemHeight)*(qPoint[1]-problemHeight) ))  ;
-	R[i] +=-(1.0/RHO/CC_T)*fe_values.shape_value_component(i, q, ck)*(LASER)*fe_values.JxW(q);
+	//LASER*=std::exp(-(BB/LAYER/LAYER)*((qPoint[1]-problemHeight)*(qPoint[1]-problemHeight) ))  ;	
+	//if(qPoint[1]>=problemHeight-LAYER) {LASER*=1;}
+	//else if (qPoint[1]<problemHeight-LAYER) {LASER*=0;}
+	R[i] +=-(1.0/RHOT/CC_T)*fe_values.shape_value_component(i, q, ck)*(LASER)*fe_values.JxW(q);
 	
       }
 
       else if (ck==5) {
 	Sacado::Fad::DFad<double> FRACTION;
 	FRACTION=std::tanh((5.0/deltaT)*(T[q]-0.5*(TSS+TLL)));
+	//FRACTION=std::tanh((2.0)*(T[q]-0.5*(TSS+TLL)));
 	FRACTION=(1+FRACTION)*0.5;
 	R[i] += fe_values.shape_value_component(i, q,ck)*(liquid[q]-FRACTION )*fe_values.JxW(q);	
       }
@@ -146,17 +170,22 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
 	  if (ck==4) {  
-	    //Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
-	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
-	    Sacado::Fad::DFad<double>  KK_T=0,CC_T=0;
+	    Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
+	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  	
+	    Sacado::Fad::DFad<double>  KK_T=0.0,CC_T=0.0,RHOT=0.0;
 	    
-	   
-	    KK_T=(1-liquidface_conv[q])*KKS+(liquidface_conv[q])*KKL;
-	    CC_T=(1-liquidface_conv[q])*CCS+(liquidface_conv[q])*CCL;
-
-	    
-	    R[i] += (1.0/RHO/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tamb)*fe_face_values.JxW(q);
-	    R[i] += (1.0/RHO/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
+	    if ((qPoint[0]>VV*currentTime)) {      
+	      KK_T=(1-porosity)*KKSF*(1-liquidface_conv[q])+KKLF*(liquidface_conv[q]); 
+	      RHOT=(1-porosity)*RHOSF*(1-liquidface_conv[q])+RHOLF*(liquidface_conv[q]);
+	      CC_T=(RHOSF/RHOL)*CCS*(1-liquidface_conv[q])+(RHOLF/RHOT)*CCL*(liquidface_conv[q]);         
+	    }
+	    else if (qPoint[0]<=VV*currentTime) {
+	      KK_T=KKSF*(1-liquidface_conv[q])+KKLF*(liquidface_conv[q]); 
+	      RHOT=RHOSF*(1-liquidface_conv[q])+RHOLF*(liquidface_conv[q]);
+	      CC_T=(RHOSF/RHOT)*CCSF*(1-liquidface_conv[q])+(RHOLF/RHOT)*CCLF*(liquidface_conv[q]);         
+	    }
+	    R[i] += (1.0/RHOT/CC_T)*(HH)*fe_face_values.shape_value_component(i, q,ck)*(Tface[q]-Tamb)*fe_face_values.JxW(q);
+	    R[i] += (1.0/RHOT/CC_T)*(SIG*em)*fe_face_values.shape_value_component(i, q,ck)*(dTRAD)*fe_face_values.JxW(q);
 	  
 	  }
 	}

@@ -22,7 +22,7 @@ template <class T, int dim>
   //const unsigned int faces_per_cell = GeometryInfo<dim>::faces_per_cell;
   
   Table<3, Sacado::Fad::DFad<double>> gradU(n_q_points, dim, dim);
-  Table<1,Sacado::Fad::DFad<double>> Temp(n_q_points);
+  Table<1,Sacado::Fad::DFad<double>> TempConv(n_q_points);
   
    //Loop over quadrature points
   for (unsigned int q=0; q<n_q_points; ++q) {
@@ -38,6 +38,9 @@ template <class T, int dim>
 	  gradU[q][ck][i]+=M_ULocal[k]*fe_values.shape_grad_component(k, q, ck)[i]; //gradU
 	}
       }
+      
+      if (ck==7) {TempConv[q]+=T_ULocalConv[k]*fe_values.shape_value_component(k, q, ck);}
+
     }
     
   }              
@@ -67,7 +70,16 @@ template <class T, int dim>
     double Y=elasticModulus, nu=PoissonsRatio;
     //Lame parameters
     double lambda=(nu*Y)/((1+nu)*(1-2*nu)), mu=Y/(2*(1+nu));
-    //double lambda=LAM, mu=MU;
+
+    if (TempConv[q]>TSS) {
+      Y=elasticModulusLiquid;
+      nu=PoissonsRatioLiquid;
+      //Lame parameters
+      lambda=(nu*Y)/((1+nu)*(1-2*nu));
+      mu=Y/(2*(1+nu));
+    }
+ 
+
     Table<2, Sacado::Fad::DFad<double> > S (dim, dim);
   
     double C11=lambda+2*mu, C12=lambda, C44=mu;    
@@ -166,12 +178,17 @@ void residualForMechanics(FEValues<dim>& fe_values, unsigned int DOF, typename D
   //Lame parameters
   double lambda=(nu*Y)/((1+nu)*(1-2*nu)), mu=Y/(2*(1+nu));
   double thermalConst=(3.0*lambda+2.0*mu)*ALPHA; 
-
+  
   //evaluate Residual
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
-    const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-    
+    const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;  
     for (unsigned int q=0; q<n_q_points; ++q){
+
+      if (TempConv[q]>TSS) {
+      Y=elasticModulusLiquid; nu=PoissonsRatioLiquid; ALPHA=expCoeffLiquid;
+      lambda=(nu*Y)/((1+nu)*(1-2*nu)); mu=Y/(2*(1+nu)); thermalConst=0.0;
+    }
+
       if (ck>=0 && ck<3 /*3*/) {  
 	for (unsigned int d = 0; d < dim; d++){
 	  R[i] +=-fe_values.shape_grad_component(i, q, ck)[d]*P[q][ck][d]*fe_values.JxW(q);	  

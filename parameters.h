@@ -96,3 +96,7 @@
 #define elasticModulus 1.32e+11
 #define PoissonsRatio 0.31
 #define expCoeff 9.2e-06
+
+#define elasticModulusLiquid 1.0e+04
+#define PoissonsRatioLiquid 0.001
+#define expCoeffLiquid 0.0

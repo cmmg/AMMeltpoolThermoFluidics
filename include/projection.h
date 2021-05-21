@@ -37,13 +37,13 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 
-      if (ck>=0 && ck < 3) {
+      if (ck>=3 && ck < 6) {
 	for (unsigned int j=0; j<dim; j++) {
-	  vel_j[q][ck][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
+	  vel_j[q][ck-dim][j]+=fe_values.shape_grad_component(i, q, ck)[j]*ULocal[i];
 	}
       }
 
-      else if (ck==3) {
+      else if (ck==6) {
 	for (unsigned int j=0; j<dim; j++) {
 	  phi_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*Pr_ULocal[i];
 	  
@@ -59,7 +59,7 @@ void residualForProjection(FEValues<dim>& fe_values, unsigned int DOF, FEFaceVal
   for (unsigned int i=0; i<dofs_per_cell; ++i) {
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;        
     for (unsigned int q=0; q<n_q_points; ++q) {              
-      if (ck==3) {
+      if (ck==6) {
 	for (unsigned int j=0; j<dim; j++) {
 	  Rp[i]+=-(1.0)*fe_values.shape_grad_component(i, q, ck)[j]*(phi_j[q][j])*fe_values.JxW(q);
 	}

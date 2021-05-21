@@ -36,18 +36,18 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     for (unsigned int j=0; j<dim; j++) {T_j[q][j]=0.0; liquid_j[q][j]=0.0; vel[q][j]=0.0; }
     for (unsigned int i=0; i<dofs_per_cell; ++i) {
       const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;     
-       if (ck>=0 && ck<3) { 
-	 vel[q][ck]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
+       if (ck>=3 && ck<6) { 
+	 vel[q][ck-dim]+=fe_values.shape_value_component(i, q, ck)*ULocalConv[i];
       }
            
-       else if (ck==4) { 
+       else if (ck==7) { 
 	T[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocal[i]; T_conv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConv[i];
 	T_convconv[q]+=fe_values.shape_value_component(i, q, ck)*T_ULocalConvConv[i];
 	for (unsigned int j=0; j<dim; j++) {
 	  T_j[q][j]+=fe_values.shape_grad_component(i, q, ck)[j]*T_ULocal[i];	  
 	}
       }
-      else if (ck==5) {
+      else if (ck==8) {
 	liquid[q]+=fe_values.shape_value_component(i, q,ck)*T_ULocal[i];
 	liquid_conv[q]+=fe_values.shape_value_component(i, q,ck)*T_ULocalConv[i];
 	liquid_convconv[q]+=fe_values.shape_value_component(i, q,ck)*T_ULocalConvConv[i];
@@ -71,11 +71,11 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	Tface[q]=0.0; Tface_conv[q]=0.0;   liquid_conv[q]=0;
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
-	  if (ck==4) {
+	  if (ck==7) {
 	    Tface[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocal[i]; 
 	    Tface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i];	    
 	  }
-	  else if (ck==5) {
+	  else if (ck==8) {
 	    liquidface_conv[q]+=fe_face_values.shape_value_component(i, q, ck)*T_ULocalConv[i];	    
 	  }	  
 	}       
@@ -89,7 +89,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
     const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
     Sacado::Fad::DFad<double>  KK_T,CC_T;      
     for (unsigned int q=0; q<n_q_points; ++q) {     
-      if (ck==4) {		
+      if (ck==7) {		
 	KK_T=(1-liquid_conv[q])*KKS+(liquid_conv[q])*KKL;
 	CC_T=(1-liquid_conv[q])*CCS+(liquid_conv[q])*CCL;
 
@@ -121,7 +121,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	
       }
 
-      else if (ck==5) {
+      else if (ck==8) {
 	Sacado::Fad::DFad<double> FRACTION;
 	FRACTION=std::tanh((5.0/deltaT)*(T[q]-0.5*(TSS+TLL)));
 	FRACTION=(1+FRACTION)*0.5;
@@ -145,7 +145,7 @@ void residualForTherm(FEValues<dim>& fe_values, unsigned int DOF, FEFaceValues<d
 	const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - DOF;
 	
 	for (unsigned int q=0; q<n_q_points_face; ++q) {
-	  if (ck==4) {  
+	  if (ck==7) {  
 	    //Point<dim> qPoint=fe_face_values.quadrature_point(q);	  
 	    Sacado::Fad::DFad<double>  dTRAD= Tface[q]*Tface[q]*Tface[q]*Tface[q] - Tamb*Tamb*Tamb*Tamb;	 	  
 	    Sacado::Fad::DFad<double>  KK_T=0,CC_T=0;

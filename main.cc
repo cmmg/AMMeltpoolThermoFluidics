@@ -12,6 +12,8 @@
 #include "include/chemo.h"
 #include "include/projection.h"
 #include "include/therm.h"
+#include "include/mechanics.h"
+
 //Namespace
 namespace phaseField1
 {
@@ -24,14 +26,17 @@ namespace phaseField1
     InitalConditions (): Function<dim>(DIMS){ }
     void vector_value (const Point<dim>   &p, Vector<double>   &values) const{
       Assert (values.size() == DIMS, ExcDimensionMismatch (values.size(), DIMS));     
-      values(0)=0.0;  //ux
-      values(1)=0.0; //uy
-      values(2)=0.0; //uz
-      values(3)=0.0; //pressure
-
+      values(0)=0.0;  //mech ux
+      values(1)=0.0; //mech uy
+      values(2)=0.0; //mech uz
+      values(3)=0.0;  //Vx
+      values(4)=0.0; //Vy
+      values(5)=0.0; //Vz
+      values(6)=0.0; //pressure
+     
       //Initial conditon for T and LiquidFR
-      values(4)=353.0;
-      values(5)=0.0;
+      values(7)=353.0;
+      values(8)=0.0;
     }
     
   };
@@ -103,14 +108,32 @@ namespace phaseField1
     LA::MPI::Vector                           T_Unn, T_UnnGhost;
     LA::MPI::Vector                           T_UItm,T_UItmold, T_UItmGhost, DIFFT;
     LA::MPI::Vector                           T_system_rhs;
-   
+
+    DoFHandler<dim>                           M_dof_handler;
+    IndexSet                                  M_locally_owned_dofs;
+    IndexSet                                  M_locally_relevant_dofs;
+    ConstraintMatrix                          M_constraints, M_constraintsZero;
+    LA::MPI::SparseMatrix                     M_system_matrix;
+    LA::MPI::Vector                           M_locally_relevant_solution, M_U, M_Un, M_UGhost, M_UnGhost, M_dU;
+    LA::MPI::Vector                           M_Unn, M_UnnGhost;
+    LA::MPI::Vector                           M_UItm,M_UItmold, M_UItmGhost, DIFFM;
+    LA::MPI::Vector                           M_system_rhs;
     
+
     void applyBoundaryConditions_temp(const unsigned int increment);
     void setup_system_temp ();
     void assemble_system_temp();
-    void solveIteration_temp ();
+    void solveIteration_temp();
     void solve_temp ();
-    void update_TintoU (); 
+    void update_TintoU ();
+
+    
+    void applyBoundaryConditions_mech(const unsigned int increment);
+    void setup_system_mech ();
+    void assemble_system_mech();
+    void solveIteration_mech();
+    void solve_mech ();
+    void update_MintoU ();
     
     //solution variables
     unsigned int currentIncrement, currentIteration;
@@ -125,10 +148,11 @@ namespace phaseField1
                    typename Triangulation<dim>::MeshSmoothing
                    (Triangulation<dim>::smoothing_on_refinement |
                     Triangulation<dim>::smoothing_on_coarsening)),
-    fe(FE_Q<dim>(2),3,FE_Q<dim>(1),1,FE_Q<dim>(2),2),
+    fe(FE_Q<dim>(2),3,FE_Q<dim>(2),3,FE_Q<dim>(1),1,FE_Q<dim>(2),2),
     dof_handler(triangulation),
     Pr_dof_handler(triangulation),
     T_dof_handler(triangulation),
+    M_dof_handler(triangulation),
     pcout (std::cout, (Utilities::MPI::this_mpi_process(mpi_communicator)== 0)),
     computing_timer (mpi_communicator, pcout, TimerOutput::summary, TimerOutput::wall_times){
     //solution variables
@@ -136,7 +160,11 @@ namespace phaseField1
     currentIncrement=0; currentTime=0;
 
     //nodal Solution names
+    for (unsigned int i=0; i<dim; ++i){
+      nodal_solution_names.push_back("mech_disp"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_part_of_vector);
+    }
 
+        
     for (unsigned int i=0; i<dim; ++i){
       nodal_solution_names.push_back("velocity"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_part_of_vector);
     }
@@ -144,8 +172,7 @@ namespace phaseField1
     nodal_solution_names.push_back("pressure"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
     nodal_solution_names.push_back("Temp"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
     nodal_solution_names.push_back("Liquid"); nodal_data_component_interpretation.push_back(DataComponentInterpretation::component_is_scalar);
-      
- 
+
   }
   
   template <int dim>
@@ -153,6 +180,7 @@ namespace phaseField1
     dof_handler.clear ();
     Pr_dof_handler.clear();
     T_dof_handler.clear();
+    M_dof_handler.clear();
   }
 
   //Apply boundary conditions for diffusion step
@@ -167,9 +195,9 @@ namespace phaseField1
     
    
     //Setup boundary conditions
-    std::vector<bool> uB (DIMS, false); uB[0]=true; uB[1]=true; uB[2]=true;
-    std::vector<bool> uBT (DIMS, false); uBT[1]=true; 
-     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
+    std::vector<bool> uB (DIMS, false); uB[3]=true;    uB[4]=true; uB[5]=true;
+    std::vector<bool> uBT (DIMS, false); uBT[4]=true; 
+    // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
     //left
     VectorTools::interpolate_boundary_values (dof_handler, 0, ZeroFunction<dim>(DIMS), constraints,uB);
@@ -210,9 +238,9 @@ namespace phaseField1
     DoFTools::make_hanging_node_constraints (Pr_dof_handler, Pr_constraintsZero);
     
     //Setup boundary conditions
-    std::vector<bool> uBC (DIMS, false);  uBC[3]=true;
+    std::vector<bool> uBC (DIMS, false);  uBC[6]=true;
 
-    FEValuesExtractors::Scalar pressure(dim); //dim is 3
+    FEValuesExtractors::Scalar pressure(dim+3); //dim is 3
 
     typename DoFHandler<dim>::active_cell_iterator
       cell = Pr_dof_handler.begin_active(), endc = Pr_dof_handler.end();
@@ -269,7 +297,7 @@ namespace phaseField1
    
     //Setup boundary conditions
     //std::vector<bool> uBL (DIMS, false); uBL[3]=true;    
-    std::vector<bool> uBB (DIMS, false); uBB[4]=true;   
+    std::vector<bool> uBB (DIMS, false); uBB[7]=true;   
   
     // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
     
@@ -281,6 +309,53 @@ namespace phaseField1
     T_constraintsZero.close ();
   }
 
+
+ //Apply boundary conditions for diffusion step
+  template <int dim>
+  void phaseField<dim>::applyBoundaryConditions_mech(const unsigned int increment){
+    M_constraints.clear (); 
+    M_constraints.reinit (M_locally_relevant_dofs);
+    //    DoFTools::make_hanging_node_constraints (dof_handler, constraints);
+    M_constraintsZero.clear (); 
+    M_constraintsZero.reinit (M_locally_relevant_dofs);
+    DoFTools::make_hanging_node_constraints (M_dof_handler, M_constraintsZero);
+    
+   
+    //Setup boundary conditions
+    //std::vector<bool> uBL (DIMS, false); uBL[3]=true;    
+    std::vector<bool> uBB (DIMS, false); uBB[0]=true; uBB[1]=true; uBB[2]=true; 
+    std::vector<bool> uBT (DIMS, false); uBT[1]=true;  
+
+      
+    // 1 : walls top and bowttom , 2 : inlet 3: outlet 4: cavity walls
+    //left
+    //  VectorTools::interpolate_boundary_values (M_dof_handler, 0, ZeroFunction<dim>(DIMS), M_constraints,uBB);
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 0, ZeroFunction<dim>(DIMS), M_constraintsZero,uBB);
+
+    //right
+    // VectorTools::interpolate_boundary_values (M_dof_handler, 1, ZeroFunction<dim>(DIMS) , M_constraints,uBB);
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 1, ZeroFunction<dim>(DIMS) , M_constraintsZero,uBB);
+
+    //bottom
+    VectorTools::interpolate_boundary_values (M_dof_handler, 2, ZeroFunction<dim>(DIMS), M_constraints,uBB);
+    VectorTools::interpolate_boundary_values (M_dof_handler, 2, ZeroFunction<dim>(DIMS), M_constraintsZero,uBB);
+
+    //top
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 3, ZeroFunction<dim>(DIMS) , M_constraints,uBT);
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 3, ZeroFunction<dim>(DIMS) , M_constraintsZero,uBT);    
+    
+    //front
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 4, ZeroFunction<dim>(DIMS) , M_constraints,uBB);
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 4, ZeroFunction<dim>(DIMS) , M_constraintsZero,uBB);
+    
+    //back
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 5, ZeroFunction<dim>(DIMS) , M_constraints,uBB);
+    //VectorTools::interpolate_boundary_values (M_dof_handler, 5, ZeroFunction<dim>(DIMS) , M_constraintsZero,uBB);
+    
+    
+    M_constraints.close ();
+    M_constraintsZero.close ();
+  }
 
   
   //Setup
@@ -414,7 +489,42 @@ namespace phaseField1
     T_system_matrix.reinit (T_locally_owned_dofs, T_locally_owned_dofs, T_dsp, mpi_communicator);
   }
 
-   
+
+   //Setup
+  template <int dim>
+  void phaseField<dim>::setup_system_mech (){
+    TimerOutput::Scope t(computing_timer, "setup");
+    M_dof_handler.distribute_dofs (fe);
+    
+    M_locally_owned_dofs = M_dof_handler.locally_owned_dofs ();
+    DoFTools::extract_locally_relevant_dofs (M_dof_handler,
+                                             M_locally_relevant_dofs);  
+    M_locally_relevant_solution.reinit (M_locally_owned_dofs, M_locally_relevant_dofs, mpi_communicator);
+
+    //Non-ghost vectors
+    M_system_rhs.reinit (M_locally_owned_dofs, mpi_communicator);
+    M_U.reinit (M_locally_owned_dofs, mpi_communicator);
+    M_Un.reinit (M_locally_owned_dofs, mpi_communicator);
+    M_dU.reinit (M_locally_owned_dofs, mpi_communicator);    
+    M_Unn.reinit (M_locally_owned_dofs, mpi_communicator);
+
+    //    DIFFM.reinit(M_U,false);
+
+    //Ghost vectors
+    M_UGhost.reinit (M_locally_owned_dofs, M_locally_relevant_dofs, mpi_communicator);
+    M_UnGhost.reinit (M_locally_owned_dofs, M_locally_relevant_dofs, mpi_communicator);
+    //    M_UnnGhost.reinit (M_locally_owned_dofs, M_locally_relevant_dofs, mpi_communicator);
+
+
+    //call applyBoundaryConditions to setup constraints matrix needed for generating the sparsity pattern
+    applyBoundaryConditions_mech(0);
+    
+    DynamicSparsityPattern M_dsp (M_locally_relevant_dofs);
+    DoFTools::make_sparsity_pattern (M_dof_handler, M_dsp, M_constraints, false);
+    SparsityTools::distribute_sparsity_pattern (M_dsp, M_dof_handler.n_locally_owned_dofs_per_processor(), mpi_communicator, M_locally_relevant_dofs);
+    M_system_matrix.reinit (M_locally_owned_dofs, M_locally_owned_dofs, M_dsp, mpi_communicator);
+  }
+  
   //Assembly
   template <int dim>
   void phaseField<dim>::assemble_system (){
@@ -683,6 +793,92 @@ namespace phaseField1
   }
 
 
+    //Assembly
+  template <int dim>
+  void phaseField<dim>::assemble_system_mech (){
+    TimerOutput::Scope t(computing_timer, "assembly");
+    M_system_rhs=0.0; M_system_matrix=0.0;
+    const QGauss<dim>  quadrature_formula(FEOrder+2);
+    const QGauss<dim-1> face_quadrature_formula (FEOrder+1);
+    FEValues<dim> fe_values (fe, quadrature_formula,
+                             update_values    |  update_gradients |
+                             update_quadrature_points |
+                             update_JxW_values);
+    //    FEFaceValues<dim> fe_face_values (fe, face_quadrature_formula, update_values | update_gradients | update_quadrature_points | update_JxW_values | update_normal_vectors);
+    
+    FEFaceValues<dim> fe_face_values (fe, face_quadrature_formula,
+				      update_values    |  update_gradients |
+				      update_quadrature_points |
+				      update_JxW_values  |
+				      update_normal_vectors);
+    
+    
+    const unsigned int   dofs_per_cell = fe.dofs_per_cell;
+    FullMatrix<double>   local_matrix (dofs_per_cell, dofs_per_cell);
+    Vector<double>       local_rhs (dofs_per_cell);
+    std::vector<unsigned int> local_dof_indices (dofs_per_cell);
+    unsigned int n_q_points= fe_values.n_quadrature_points;
+
+    //    unsigned int n_q_points_face= fe_face_values.n_quadrature_points;
+    //const unsigned int faces_per_cell = GeometryInfo<dim>::faces_per_cell;
+  
+    typename DoFHandler<dim>::active_cell_iterator cell = M_dof_handler.begin_active(), endc = M_dof_handler.end();
+    for (; cell!=endc; ++cell)
+      if (cell->is_locally_owned()){
+	fe_values.reinit (cell);
+	local_matrix = 0; local_rhs = 0; 
+	cell->get_dof_indices (local_dof_indices);
+	//AD variables
+	Table<1, Sacado::Fad::DFad<double> > M_ULocal(dofs_per_cell); 
+	//Table<1, double > M_ULocalConv(dofs_per_cell);
+	//Table<1, double > M_ULocalConvConv(dofs_per_cell);
+	Table<1, double > T_ULocalConv(dofs_per_cell); 
+	//Table<1, double > ULocalConvConv(dofs_per_cell);
+	
+	for (unsigned int i=0; i<dofs_per_cell; ++i){
+	  const unsigned int ck = fe_values.get_fe().system_to_component_index(i).first - 0;
+	    
+	  if (std::abs(M_UGhost(local_dof_indices[i]))<1.0e-16){M_ULocal[i]=0.0;}
+	  else{M_ULocal[i]=M_UGhost(local_dof_indices[i]);}
+	  
+	  M_ULocal[i].diff (i, dofs_per_cell);
+	  //  M_ULocalConv[i]= M_UnGhost(local_dof_indices[i]);
+	  T_ULocalConv[i]=T_UGhost(local_dof_indices[i]); 
+
+	}
+
+	//setup residual vector
+	Table<1, Sacado::Fad::DFad<double> > R(dofs_per_cell); 
+	for (unsigned int i=0; i<dofs_per_cell; ++i) {R[i]=0.0;}
+	
+	//residualForMechanics(fe_values, fe_face_values, 0, Table<1, M_ULocal, ULocalConv,  R, cell, currentTime);
+	residualForMechanics(fe_values, 0, cell, dt, M_ULocal, T_ULocalConv,  R, currentTime, totalTime) ;
+	
+
+	//evaluate Residual(R) and Jacobian(R')
+	for (unsigned int i=0; i<dofs_per_cell; ++i) {
+	  for (unsigned int j=0; j<dofs_per_cell; ++j){
+	    // R' by AD
+	    //local_matrix(i,j)= R[i].fastAccessDx(j);
+	    local_matrix(i,j)= R[i].dx(j);
+	  }
+	  //R
+	  local_rhs(i) = -R[i].val();
+	}
+	if ((currentIteration==0)&&(currentIncrement==1)){
+	  M_constraints.distribute_local_to_global (local_matrix, local_rhs, local_dof_indices, M_system_matrix, M_system_rhs);
+	}
+	else{
+	  M_constraintsZero.distribute_local_to_global (local_matrix, local_rhs, local_dof_indices, M_system_matrix, M_system_rhs);
+	}
+      }
+    M_system_matrix.compress (VectorOperation::add);
+    M_system_rhs.compress (VectorOperation::add);
+    //    if(!isnan(M_system_matrix.frobenius_norm())) pcout << "\m system matrix: " << M_system_matrix.frobenius_norm() << std::endl;
+    //if(!isnan(M_system_rhs.l2_norm())) pcout << "\m system rhs: " << M_system_rhs.l2_norm() << std::endl;
+  }
+
+
 
   
   //Solve
@@ -861,6 +1057,84 @@ namespace phaseField1
   }   
 
 
+    
+  //Solve
+  template <int dim>
+  void phaseField<dim>::solveIteration_mech(){
+    TimerOutput::Scope t(computing_timer, "solve");
+    LA::MPI::Vector completely_distributed_solution (M_locally_owned_dofs, mpi_communicator);          
+    //Iterative solvers from Petsc and Trilinos
+    SolverControl solver_control (M_dof_handler.n_dofs(), 1e-12);
+#ifdef USE_PETSC_LA
+    LA::SolverGMRES solver(solver_control, mpi_communicator);
+#else
+    LA::SolverGMRES solver(solver_control);
+#endif
+    LA::MPI::PreconditionAMG preconditioner;
+    LA::MPI::PreconditionAMG::AdditionalData data;
+#ifdef USE_PETSC_LA //dof_handler.get_fe().n_components()
+    //data.symmetric_operator = true;
+#else
+    // Trilinos defaults are good 
+#endif
+    //if lever is true run for diffusion part 
+    preconditioner.initialize(M_system_matrix, data);
+    solver.solve (M_system_matrix, completely_distributed_solution, M_system_rhs, preconditioner);
+    pcout << "   Solved in " << solver_control.last_step()
+          << " iterations." << std::endl;
+    
+    //std::cout <<"sys matx  is " <<system_matrix.frobenius_norm()<<std::endl;
+
+    //Direct solver MUMPS
+    //SolverControl cn;
+    //PETScWrappers::SparseDirectMUMPS solver(cn, mpi_communicator);
+    //solver.set_symmetric_mode(false);
+    //solver.solve(system_matrix, completely_distributed_solution, system_rhs);
+    
+    if ((currentIteration==0)&&(currentIncrement==1)){
+      M_constraints.distribute (completely_distributed_solution);
+    }
+    else{
+      M_constraintsZero.distribute (completely_distributed_solution);
+    }
+    M_locally_relevant_solution = completely_distributed_solution;
+    M_dU = completely_distributed_solution; 
+                         
+  }   
+  
+  
+
+  /* 
+    template <int dim>
+  void phaseField<dim>::solveIteration_mech ()
+  {
+    TimerOutput::Scope t(computing_timer, "solve");
+    PETScWrappers::MPI::Vector
+      completely_distributed_solution (locally_owned_dofs,mpi_communicator);
+    //distributed_incremental_displacement = incremental_displacement;
+    SolverControl           solver_control (M_dof_handler.n_dofs(),
+                                            1e-16*M_system_rhs.l2_norm());
+    PETScWrappers::SolverGMRES cg (solver_control,
+				   mpi_communicator);
+    PETScWrappers::PreconditionBlockJacobi preconditioner(M_system_matrix);
+    cg.solve (M_system_matrix,  completely_distributed_solution, M_system_rhs,
+              preconditioner);
+    
+    if ((currentIteration==0) && (currentIncrement==1)){
+      M_constraints.distribute (completely_distributed_solution);
+    }
+    else{
+      M_constraintsZero.distribute (completely_distributed_solution);
+    }
+    
+    locally_relevant_solution = completely_distributed_solution;
+    M_dU = completely_distributed_solution;
+    pcout << "   Solved in " << solver_control.last_step()
+    << " iterations." << std::endl;
+  }
+  
+*/  
+    
   
   //Solve
   template <int dim>
@@ -926,7 +1200,9 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
     Unn=Un; UnnGhost=Unn;        
     T_Unn=T_Un; T_UnnGhost=T_Unn;
     T_Un=T_U; T_UnGhost=T_Un;
+    solve_mech(); 
     update_TintoU();
+    //update_MintoU();
     Un=U; UnGhost=Un; // copy updated values in Un and UnGhost;
   }
 
@@ -945,7 +1221,9 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
       if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
       assemble_system_projection();       
       current_norm=Pr_system_rhs.l2_norm();
-      //     if(isnan(current_norm)) pcout << "rhs has a nan: " << current_norm << std::endl;      
+      
+      //if(isnan(current_norm)) pcout << "rhs has a nan: " << current_norm << std::endl;      
+      
       initial_norm=std::max(initial_norm, current_norm);
       res=current_norm/initial_norm;
       sprintf(buffer,"inc:%3u (time:%10.3e, dt:%10.3e), iter:%2u, abs-norm: %10.2e, rel-norm: %10.2e\n", currentIncrement, currentTime, dt,  currentIteration, current_norm, res); pcout<<buffer; 
@@ -986,6 +1264,39 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	++currentIteration;
       }
     
+  }
+
+
+     //Solve
+  template <int dim>
+  void phaseField<dim>::solve_mech() {     
+      double res=1, tol=1.0e-12, abs_tol=1.0e-11, initial_norm=0, current_norm=0;
+      double machineEPS=1.0e-15;
+      currentIteration=0;
+      char buffer[200];          
+      pcout << "Solving for mechanics "<<std::endl;    
+      while (true){
+	if (currentIteration>=10){sprintf(buffer, "maximum number of iterations reached without convergence. \n"); pcout<<buffer; break;exit (1);}
+	if (current_norm>1/std::pow(tol,2)){sprintf(buffer, "\n norm is too high. \n\n"); pcout<<buffer; break; exit (1);}
+	assemble_system_mech();       
+	current_norm=M_system_rhs.l2_norm();
+	
+	initial_norm=std::max(initial_norm, current_norm);
+	res=current_norm/initial_norm;
+	
+	//if(isnan(res)) pcout << "nan in res: " << res << std::endl;      
+	//if(!isnan(initial_norm)) pcout << "nan in initial_norm: " << initial_norm << std::endl;      
+	//if(!isnan(current_norm)) pcout << "nan in current_norm: " << current_norm << std::endl;      
+	
+	sprintf(buffer,"inc:%3u (time:%10.3e, dt:%10.3e), iter:%2u, abs-norm: %10.2e, rel-norm: %10.2e\n", currentIncrement, currentTime, dt,  currentIteration, current_norm, res); pcout<<buffer; 
+	if ((currentIteration>1) && ((res<tol) || (current_norm<abs_tol))){sprintf(buffer,"residual converged in %u iterations.\n\n", currentIteration); pcout<<buffer; break;}
+	solveIteration_mech();
+	//T_U+=T_dU; T_UGhost=T_U; 
+	M_U+=M_dU; M_UGhost=M_U; 
+	++currentIteration;
+      }
+
+      M_Un=M_U; M_UnGhost=M_Un;
   }
 
   
@@ -1030,7 +1341,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	  for (unsigned int i=0; i<dofs_per_cell ; ++i) {
 	    //RHS
 	    unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;
-	    if(ci==dim) {
+	    if(ci==6) {
 	      for(unsigned int d=0; d<dim ; ++d) {
 		local_rhs[i] +=fe_values.shape_value_component(i, q, ci)*(quadGradU[q][d][d])*fe_values.JxW(q);   
 	      }
@@ -1040,8 +1351,8 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	           
 	    for (unsigned int j=0; j<dofs_per_cell ; ++j) {
 	      unsigned int cj = fe_values.get_fe().system_to_component_index(j).first - 0;
-	      if(ci==cj && ci==dim) { 
-		local_matrix[i][j]+=fe_values.shape_value_component(i, q,dim)*fe_values.shape_value_component(j, q,dim)*fe_values.JxW(q);    }
+	      if(ci==cj && ci==6) { 
+		local_matrix[i][j]+=fe_values.shape_value_component(i, q,dim+3)*fe_values.shape_value_component(j, q,dim+3)*fe_values.JxW(q);    }
 	    }
 	  }
 	}
@@ -1085,7 +1396,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	  press_update[i]=0;
 	  const unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;   
 	  //note value of pressue L2_ UGhost  
-	  if (ci==dim) {
+	  if (ci==6) {
 	    press_update[i]=Pr_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
 	    press_update[i]+=UnGhost(local_dof_indices[i]); //press_k is noted and added to phi_k+1
 	    //    press_update[i]+=-(nu)*L2_UGhost(local_dof_indices[i]); //nu. div.v
@@ -1119,7 +1430,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
     typename parallel::distributed::Triangulation<dim>::active_cell_iterator t_cell = triangulation.begin_active();
    
     std::vector<unsigned int> local_dof_indices (dofs_per_cell);
-    std::vector<double> T_update(dofs_per_cell), Liq_update(dofs_per_cell);
+    std::vector<double> T_update(dofs_per_cell), Liq_update(dofs_per_cell),M_update(dofs_per_cell);
 
     //get values of p,phi and nu time div v 
     for (;cell!=endc; ++cell) {     
@@ -1130,13 +1441,21 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	//pressure update
 	for (unsigned int i=0; i<dofs_per_cell; ++i) {
 	  T_update[i]=0;Liq_update[i]=0;
+	  M_update[i]=0;
+	  
 	  const unsigned int ci = fe_values.get_fe().system_to_component_index(i).first - 0;   
+
+	   if (ci>=0 && ci<3) {
+	     M_update[i]=M_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
+	     U(local_dof_indices[i])=M_update[i];    
+	  }
+	  
 	  //note value of pressue L2_ UGhost  
-	  if (ci==4) {
+	  if (ci==7) {
 	    T_update[i]=T_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
 	    U(local_dof_indices[i])=T_update[i];    
 	  }
-	  if (ci==5) {
+	  if (ci==8) {
 	    Liq_update[i]=T_UnGhost(local_dof_indices[i]); //phi_k+1 is noted
 	    U(local_dof_indices[i])=Liq_update[i];    
 	  }
@@ -1150,7 +1469,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
   }
 
   
-  
+  /*
   
   //Adaptive grid refinement
   template <int dim>
@@ -1226,7 +1545,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	   if (isMeshRefined){checkSum=1.0;}
 	   checkSum= Utilities::MPI::sum(checkSum, mpi_communicator); //checkSum is greater then 0, then all processors call adative refinement shown below
 	   //
-	   if (1/*checkSum>0.0*/) {
+	   if (1) {
 	     
 	     //define solution transfer object
 	     parallel::distributed::SolutionTransfer<dim, LA::MPI::Vector > soltrans(dof_handler);
@@ -1324,7 +1643,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 	 }
        }
   
-  
+  */
   
   //Output
   template <int dim>
@@ -1396,6 +1715,8 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
     setup_system(); //initial setup
     setup_system_projection();   
     setup_system_temp();
+    setup_system_mech();
+
      
     UItm.reinit (locally_owned_dofs, mpi_communicator);
     UItmold.reinit (locally_owned_dofs, mpi_communicator);
@@ -1415,12 +1736,13 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 
     Pr_U=U;Pr_Un=Pr_U;Pr_Unn=Pr_Un;
     T_U=U; T_Un=T_U; T_Unn=T_Un ;
+    M_U=U; M_Un=M_U;
     //sync ghost vectors to non-ghost vectors
     UGhost=U; UnGhost=Un;UnnGhost=Unn;
     Pr_UGhost=Pr_U;Pr_UnGhost=Pr_Un;Pr_UnnGhost=Pr_Unn;
 
     T_UGhost=U; T_UnGhost=Un;T_UnnGhost=Unn;
-   
+    M_UGhost=U; M_UnGhost=Un;
     output_results (0);
     
     //Time stepping
@@ -1441,7 +1763,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
 
       int NSTEP=(currentTime/dt);
       if (NSTEP%10==0) output_results(currentIncrement); 
-      refine_grid();
+      //     refine_grid();
       pcout << std::endl;
      
     }

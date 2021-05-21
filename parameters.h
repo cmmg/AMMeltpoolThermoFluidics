@@ -1,12 +1,12 @@
 //problem geometry, mesh control
-#define DIMS 6 //2
+#define DIMS 9 //2
 #define FEOrder 2
 
 #define problemWidth  0.5e-03 //[2]
 #define problemHeight 0.5e-03   //[1]
 #define problemLength 3.0e-03   //[0]
 
-#define globalRefinementFactor 1
+#define globalRefinementFactor 3
 #define maxRefinementLevel (globalRefinementFactor+4)
 #define minRefinementLevel (globalRefinementFactor-1)
 
@@ -27,7 +27,7 @@
 //Material parameters of ss316
 
 //viscosity
-#define mu 7.0e-03
+#define mmu 7.0e-03
 
 //surface tension grad
 #define dGammadT -0.4e-03
@@ -92,3 +92,7 @@
 #define gravity 9.8
 
 
+//Mechanics
+#define elasticModulus 1.32e+11
+#define PoissonsRatio 0.31
+#define expCoeff 9.2e-06

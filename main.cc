@@ -160,7 +160,7 @@ namespace phaseField1
   void phaseField<dim>::applyBoundaryConditions(const unsigned int increment){
     constraints.clear (); 
     constraints.reinit (locally_relevant_dofs);
-    //    DoFTools::make_hanging_node_constraints (dof_handler, constraints);
+    DoFTools::make_hanging_node_constraints (dof_handler, constraints);
     constraintsZero.clear (); 
     constraintsZero.reinit (locally_relevant_dofs);
     DoFTools::make_hanging_node_constraints (dof_handler, constraintsZero);
@@ -204,7 +204,7 @@ namespace phaseField1
   void phaseField<dim>::applyBoundaryConditions_projection(const unsigned int increment){
     Pr_constraints.clear (); L2_constraints.clear(); 
     Pr_constraints.reinit (Pr_locally_relevant_dofs);  L2_constraints.reinit (Pr_locally_relevant_dofs); 
-    //DoFTools::make_hanging_node_constraints (dof_handler, constraints);
+    DoFTools::make_hanging_node_constraints (Pr_dof_handler, Pr_constraints);
     Pr_constraintsZero.clear (); 
     Pr_constraintsZero.reinit (Pr_locally_relevant_dofs);
     DoFTools::make_hanging_node_constraints (Pr_dof_handler, Pr_constraintsZero);
@@ -261,7 +261,7 @@ namespace phaseField1
   void phaseField<dim>::applyBoundaryConditions_temp(const unsigned int increment){
     T_constraints.clear (); 
     T_constraints.reinit (T_locally_relevant_dofs);
-    //    DoFTools::make_hanging_node_constraints (dof_handler, constraints);
+    DoFTools::make_hanging_node_constraints (T_dof_handler, T_constraints);
     T_constraintsZero.clear (); 
     T_constraintsZero.reinit (T_locally_relevant_dofs);
     DoFTools::make_hanging_node_constraints (T_dof_handler, T_constraintsZero);
@@ -1440,7 +1440,7 @@ sprintf(buffer,"intermediate step no. is  %u steps, error is: %10.2e \n \n", tog
       } 
 
       int NSTEP=(currentTime/dt);
-      if (NSTEP%10==0) output_results(currentIncrement); 
+      if (NSTEP%1==0) output_results(currentIncrement); 
       refine_grid();
       pcout << std::endl;
      
